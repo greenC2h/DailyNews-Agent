@@ -8,10 +8,11 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.db.database import SessionLocal
 from app.db.models import User
-from app.db.news_models import Briefing, GenerationTask, NewsEvent, ScheduledTask
+from app.db.news_models import Briefing, GenerationTask, NewsEvent, ScheduledTask, TaskExecution
 from app.services.scheduler import next_run
 from app.services.generation import generate_briefing
 from app.services.news import fetch_articles
+from app.services.rag import index_events
 
 logger = logging.getLogger("dailynews.worker")
 
@@ -25,6 +26,7 @@ def process_task(task_id: str) -> None:
         task = db.scalar(select(GenerationTask).where(GenerationTask.id == task_id, GenerationTask.status == "queued").with_for_update(skip_locked=True))
         if not task: return
         task.status = "running"; db.commit()
+        execution = TaskExecution(user_id=task.user_id, generation_task_id=task.id, status="running", phase="collecting"); db.add(execution); db.commit()
         user = db.get(User, task.user_id)
         if not user:
             task.status = "system_failed"; task.error_code = "USER_MISSING"; db.commit(); return
@@ -33,6 +35,7 @@ def process_task(task_id: str) -> None:
             if task.cancel_requested:
                 task.status = "cancelled"; db.commit(); return
             articles = fetch_articles(task.query, start=task.window_start, end=task.window_end, limit=task.limit)
+            execution.phase = "processing"; db.commit()
             db.refresh(task)
             if task.cancel_requested:
                 task.status = "cancelled"; db.commit(); return
@@ -46,18 +49,23 @@ def process_task(task_id: str) -> None:
                 task.status = "no_events"; task.error_code = "NO_EVENTS"; db.commit(); return
             briefing = Briefing(user_id=user.id, title=f"{task.query} 新闻简报", query=task.query, event_count=len(events), html_path="")
             db.add(briefing); db.flush()
+            saved_events = []
             for event in events:
                 source = event.sources[0]
-                db.add(NewsEvent(briefing_id=briefing.id, user_id=user.id, title=event.title, source=source.source, url=source.url, published_at=datetime.fromisoformat(source.published_at), summary=event.summary, facts={"items":event.facts,"sources":[item.model_dump() for item in event.sources]}))
+                saved = NewsEvent(briefing_id=briefing.id, user_id=user.id, title=event.title, source=source.source, url=source.url, published_at=datetime.fromisoformat(source.published_at), summary=event.summary, facts={"items":event.facts,"sources":[item.model_dump() for item in event.sources]}); db.add(saved); saved_events.append(saved)
             directory = settings.html_root / user.id; directory.mkdir(parents=True, exist_ok=True)
             path = directory / f"{briefing.id}.html"; temp_path = path.with_suffix(".tmp")
             temp_path.write_text(html, encoding="utf-8"); temp_path.replace(path)
-            briefing.html_path = str(path); task.briefing_id = briefing.id; task.status = "succeeded"; task.error_code = None; db.commit()
+            briefing.html_path = str(path); task.briefing_id = briefing.id; task.status = "succeeded"; task.error_code = None; execution.status = "succeeded"; execution.phase = "completed"; execution.event_count = len(saved_events); execution.finished_at = datetime.now(timezone.utc); db.commit()
+            try: index_events(saved_events)
+            except Exception: logger.exception("event indexing failed id=%s", task.id)
         except Exception as exc:
             db.rollback()
             task = db.get(GenerationTask, task_id)
             if task and task.status == "running":
-                task.status = "generation_failed"; task.error_code = type(exc).__name__[:64]; db.commit()
+                task.status = "generation_failed"; task.error_code = type(exc).__name__[:64]
+                if 'execution' in locals(): execution.status = "generation_failed"; execution.phase = "failed"; execution.error_code = type(exc).__name__[:64]; execution.finished_at = datetime.now(timezone.utc)
+                db.commit()
             logger.exception("generation task failed id=%s", task_id)
 
 def run_worker(poll_interval: float = 2.0) -> None:

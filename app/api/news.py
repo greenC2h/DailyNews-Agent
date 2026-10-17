@@ -8,7 +8,7 @@ from app.api.auth import current_user
 from app.config import get_settings
 from app.db.database import get_db
 from app.db.models import User
-from app.db.news_models import Briefing, NewsEvent
+from app.db.news_models import Briefing, NewsEvent, TaskExecution
 from app.services.news import fetch_articles
 from app.db.news_models import GenerationTask
 
@@ -38,6 +38,14 @@ def task_status(task_id: str, db: Session = Depends(get_db), user: User = Depend
     task = db.query(GenerationTask).filter(GenerationTask.id == task_id, GenerationTask.user_id == user.id).first()
     if not task: raise HTTPException(404, detail={"code":"NOT_FOUND","message":"任务不存在"})
     return {"id":task.id,"status":task.status,"error_code":task.error_code,"briefing_id":task.briefing_id,"allowed_actions":["cancel"] if task.status == "queued" else []}
+
+@router.get("/tasks/{task_id}/executions")
+def task_executions(task_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """返回当前用户任务的执行阶段和结果记录。"""
+    task = db.query(GenerationTask).filter(GenerationTask.id == task_id, GenerationTask.user_id == user.id).first()
+    if not task: raise HTTPException(404, detail={"code":"NOT_FOUND","message":"任务不存在"})
+    rows = db.query(TaskExecution).filter(TaskExecution.generation_task_id == task.id, TaskExecution.user_id == user.id).order_by(TaskExecution.started_at.desc()).all()
+    return [{"id":r.id,"status":r.status,"phase":r.phase,"error_code":r.error_code,"event_count":r.event_count,"started_at":r.started_at,"finished_at":r.finished_at} for r in rows]
 
 @router.post("/tasks/{task_id}/cancel")
 def cancel_task(task_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)):

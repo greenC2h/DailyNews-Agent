@@ -37,6 +37,17 @@ def search_events(db, user_id: str, query: str, limit: int = 20) -> list[NewsEve
     pattern = f"%{query}%"
     return db.query(NewsEvent).filter(NewsEvent.user_id == user_id, (NewsEvent.title.ilike(pattern) | NewsEvent.summary.ilike(pattern))).order_by(NewsEvent.published_at.desc()).limit(limit).all()
 
+def vector_event_ids(user_id: str, query: str, limit: int = 20) -> list[str]:
+    """使用 Embedding 和 Milvus 召回当前用户事件 ID，失败时返回空列表。"""
+    settings = get_settings()
+    try:
+        from langchain_openai import OpenAIEmbeddings
+        embedder = OpenAIEmbeddings(model=settings.embedding_model, dimensions=settings.embedding_dimension, api_key=settings.embedding_api_key, base_url=settings.embedding_base_url)
+        vector = embedder.embed_query(query); result = _client().search(settings.milvus_collection, data=[vector], filter=f'user_id == "{user_id}"', limit=limit, output_fields=["id"])
+        return [str(item["id"]) for item in result[0]]
+    except Exception:
+        return []
+
 def milvus_status() -> dict:
     """检查 Milvus 配置状态，不在 Web 启动时隐式建 collection。"""
     settings = get_settings()

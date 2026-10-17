@@ -53,3 +53,21 @@ class MailDelivery(Base):
     recipient_email: Mapped[str] = mapped_column(String(320)); status: Mapped[str] = mapped_column(String(32), default="pending")
     attempts: Mapped[int] = mapped_column(Integer, default=0); last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True); created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+class TaskExecution(Base):
+    """保存每次立即或定时任务执行的阶段和结果。"""
+    __tablename__ = "task_executions"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    generation_task_id: Mapped[str] = mapped_column(ForeignKey("generation_tasks.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="running"); phase: Mapped[str] = mapped_column(String(32), default="queued")
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True); event_count: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)); finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+class ConversationMessage(Base):
+    """保存用户会话消息，按用户和线程隔离。"""
+    __tablename__ = "conversation_messages"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    thread_id: Mapped[str] = mapped_column(String(100), index=True); role: Mapped[str] = mapped_column(String(20)); content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
