@@ -16,3 +16,40 @@ class NewsEvent(Base):
     __tablename__ = "news_events"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4())); briefing_id: Mapped[str] = mapped_column(ForeignKey("briefings.id", ondelete="CASCADE"), index=True); user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(500)); source: Mapped[str] = mapped_column(String(200)); url: Mapped[str] = mapped_column(String(2000)); published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True)); summary: Mapped[str] = mapped_column(Text); facts: Mapped[dict] = mapped_column(JSON, default=dict)
+
+class GenerationTask(Base):
+    """保存立即简报任务及其可恢复执行状态。"""
+    __tablename__ = "generation_tasks"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    query: Mapped[str] = mapped_column(String(500)); limit: Mapped[int] = mapped_column(Integer, default=5)
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
+    briefing_id: Mapped[str | None] = mapped_column(ForeignKey("briefings.id", ondelete="SET NULL"), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cancel_requested: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+class ScheduledTask(Base):
+    """保存每日或一次性定时任务及其时区配置。"""
+    __tablename__ = "scheduled_tasks"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(200)); frequency: Mapped[str] = mapped_column(String(16))
+    timezone: Mapped[str] = mapped_column(String(64)); run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    query: Mapped[str] = mapped_column(String(500)); limit: Mapped[int] = mapped_column(Integer, default=5)
+    recipient_email: Mapped[str] = mapped_column(String(320)); status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True)); last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+class MailDelivery(Base):
+    """记录简报邮件发送状态，保留不确定结果。"""
+    __tablename__ = "mail_deliveries"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    briefing_id: Mapped[str] = mapped_column(ForeignKey("briefings.id", ondelete="CASCADE"), index=True)
+    recipient_email: Mapped[str] = mapped_column(String(320)); status: Mapped[str] = mapped_column(String(32), default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, default=0); last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True); created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

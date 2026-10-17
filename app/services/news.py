@@ -19,11 +19,21 @@ class NewsArticle:
 
 class _TextParser(HTMLParser):
     """提取正文可读文本的轻量 HTML 解析器。"""
-    def __init__(self): super().__init__(); self.parts: list[str] = []
+    def __init__(self):
+        """初始化文本节点缓冲区和忽略标签深度。"""
+        super().__init__(); self.parts: list[str] = []; self.ignored_depth = 0
     def handle_data(self, data: str) -> None:
         """收集非空文本节点。"""
         value = re.sub(r"\s+", " ", data).strip()
-        if value: self.parts.append(value)
+        if value and not self.ignored_depth: self.parts.append(value)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        """忽略脚本、样式和导航区域中的文本。"""
+        if tag in {"script", "style", "nav", "header", "footer", "noscript"}: self.ignored_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        """离开应忽略的页面区域。"""
+        if tag in {"script", "style", "nav", "header", "footer", "noscript"} and self.ignored_depth: self.ignored_depth -= 1
 
 def fetch_articles(query: str, start: datetime | None = None, end: datetime | None = None, limit: int = 10) -> list[NewsArticle]:
     """查询 Google News RSS 并只返回成功提取正文的文章。"""
