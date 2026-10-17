@@ -12,3 +12,7 @@ wheels/
 dailynews.db
 /data/
 
+
+.env
+.env.*
+!.env.example
