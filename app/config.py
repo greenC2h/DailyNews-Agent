@@ -51,6 +51,10 @@ def get_settings() -> Settings:
         settings.model_api_key = settings.deepseek_api_key
     if not settings.deepseek_base_url:
         settings.deepseek_base_url = settings.model_base_url
+    if settings.deepseek_base_url and not settings.deepseek_base_url.rstrip('/').endswith('/v1'):
+        settings.deepseek_base_url = settings.deepseek_base_url.rstrip('/') + '/v1'
+    if settings.embedding_base_url and not settings.embedding_base_url.rstrip('/').endswith('/v1'):
+        settings.embedding_base_url = settings.embedding_base_url.rstrip('/') + '/v1'
     if not settings.milvus_uri:
         settings.milvus_uri = "http://localhost:19530"
     return settings

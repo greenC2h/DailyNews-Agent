@@ -11,6 +11,8 @@ wheels/
 
 dailynews.db
 /data/
+frontend/node_modules/
+frontend/dist/
 
 
 .env
