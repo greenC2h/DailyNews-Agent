@@ -12,8 +12,10 @@ from deepagents.backends import StateBackend
 from fastapi import HTTPException
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.store.memory import InMemoryStore
+from langgraph.types import Command
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
@@ -146,6 +148,42 @@ def test_settings_tool_requires_version_and_keeps_ownership(users):
     with factory() as db:
         assert db.get(User, first.id).nickname == "更新"
         assert db.get(User, second.id).nickname == "乙"
+
+
+def test_execute_shows_full_command_and_needs_approval():
+    """显式命令先把完整命令交给审批，再执行一次；拒绝时零副作用。"""
+    invoked = []
+    model = ScriptedModel(responses=[
+        AIMessage(content="", tool_calls=[{"name": "execute", "args": {"command": "python report.py --limit 3"}, "id": "exec-1"}]),
+        AIMessage(content="命令已执行。"),
+        AIMessage(content="", tool_calls=[{"name": "execute", "args": {"command": "python cleanup.py"}, "id": "exec-2"}]),
+        AIMessage(content="操作已拒绝。"),
+    ])
+
+    @tool
+    def execute(command: str) -> str:
+        """记录测试沙箱命令执行次数。"""
+        invoked.append(command)
+        return "done"
+
+    saver, store = InMemorySaver(), InMemoryStore()
+    agent = create_deep_agent(model, tools=[execute], backend=StateBackend(), checkpointer=saver, store=store,
+                              interrupt_on={"execute": {"allowed_decisions": ["approve", "reject"]}})
+    first_config = {"configurable": {"thread_id": "approved"}}
+    pending = agent.invoke({"messages": [HumanMessage(content="运行报告")]}, first_config)
+    request = pending["__interrupt__"][0].value["action_requests"][0]
+    assert request["args"]["command"] == "python report.py --limit 3"
+    assert invoked == []
+    approved = agent.invoke(Command(resume={"decisions": [{"type": "approve"}]}), first_config)
+    assert invoked == ["python report.py --limit 3"]
+    assert approved["messages"][-1].content == "命令已执行。"
+
+    rejected_config = {"configurable": {"thread_id": "rejected"}}
+    rejected = agent.invoke({"messages": [HumanMessage(content="清理")]}, rejected_config)
+    assert rejected["__interrupt__"][0].value["action_requests"][0]["args"]["command"] == "python cleanup.py"
+    result = agent.invoke(Command(resume={"decisions": [{"type": "reject", "message": "不执行"}]}), rejected_config)
+    assert invoked == ["python report.py --limit 3"]
+    assert result["messages"][-1].content == "操作已拒绝。"
 
 
 def test_invalid_thread_is_rejected(users):
