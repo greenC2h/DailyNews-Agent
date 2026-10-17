@@ -40,6 +40,15 @@ class Settings(BaseSettings):
     open_sandbox_base_url: str | None = None
     open_sandbox_id: str | None = None
     open_sandbox_command_timeout: int = 60
+    rss_timeout_seconds: float = 15.0
+    news_retry_attempts: int = 2
+    news_retry_backoff_seconds: float = 0.3
+    worker_concurrency: int = 2
+    worker_lease_seconds: int = 180
+    rag_batch_size: int = 8
+    rag_filter_batch_size: int = 200
+    rag_similarity_threshold: float = 0.25
+    rag_index_retry_limit: int = 3
 @lru_cache
 def get_settings() -> Settings:
     """返回缓存后的配置对象。"""
