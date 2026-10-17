@@ -5,8 +5,21 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.20.0",
     "deepagents>=0.7.26",
+    "email-validator>=2.3.0",
+    "fastapi>=0.143.3",
+    "itsdangerous>=2.2.0",
     "langchain>=1.4.6",
     "langchain-openai>=1.7.2",
     "langgraph>=1.2.15",
+    "pydantic-settings>=2.16.0",
+    "python-multipart>=0.0.32",
+    "sqlalchemy>=2.1.5",
+    "uvicorn>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
 ]
