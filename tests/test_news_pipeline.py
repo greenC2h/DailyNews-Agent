@@ -159,6 +159,7 @@ def _event(title: str = "成功事件") -> generation.EventRecord:
 def test_individual_event_retry_skip_and_html_context(monkeypatch):
     """一个事件失败两次后仅跳过该事件，HTML 获得语言、风格和固定时间。"""
     calls = []
+    system_prompts = []
     saved = []
 
     class Agent:
@@ -181,6 +182,7 @@ def test_individual_event_retry_skip_and_html_context(monkeypatch):
 
     def build(schema, prompt):
         """替换模型构建，保留生产调用流程。"""
+        system_prompts.append((schema, prompt))
         return Agent(schema)
 
     monkeypatch.setattr(generation, "build_news_agent", build)
@@ -190,6 +192,11 @@ def test_individual_event_retry_skip_and_html_context(monkeypatch):
     assert sum(schema is generation.EventRecord for schema, _ in calls) == 3
     assert "成功事件" in html
     assert "输出语言：en" in calls[-1][1] and "grouped" in calls[-1][1] and START.isoformat() in calls[-1][1]
+    html_prompt = next(prompt for schema, prompt in system_prompts if schema is generation.HtmlDocument)
+    assert "不展示独立不确定性栏目或不确定性条目" in html_prompt
+    assert "不直接复制或拼接检索主题" in html_prompt
+    html_user_prompt = next(prompt for schema, prompt in calls if schema is generation.HtmlDocument)
+    assert "标题：AI 新闻简报" not in html_user_prompt
 
 
 def test_html_failure_retains_events_and_retry_reuses_them(monkeypatch):

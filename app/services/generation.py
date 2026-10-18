@@ -152,11 +152,14 @@ def generate_events(articles: list[NewsArticle], query: str, language: str, styl
 
 
 def generate_html(events: list[EventRecord], query: str, language: str, style: dict, *, time_window: dict | None = None) -> str:
-    """只使用已成功的结构化事件生成 HTML，允许失败重试时跳过采集与事件生成。"""
+    """只用成功事件生成 HTML；标题按事件主线拟定，不展示独立不确定性条目。
+
+    允许失败重试时复用已保存事件，并跳过采集与事件生成阶段。
+    """
     if not events:
         return ""
     try:
-        document = _invoke(HtmlDocument, "当前为独立HTML阶段：只根据成功事件资料生成完整自包含HTML文档。紧凑排版，避免装饰性长CSS和重复复述；保留全部事件标题、原摘要、来源链接及差异、冲突和不确定性，关键事实已体现在摘要时不重复展开。目标控制在7000字符内。遵从输入语言与风格，只返回html字段。", _context(query, language, style, time_window) + "\n标题：" + query + " 新闻简报\n成功事件资料：" + EventBatch(events=events).model_dump_json())
+        document = _invoke(HtmlDocument, "当前为独立HTML阶段：只根据成功事件资料生成完整自包含HTML文档。根据事件共同主线撰写简洁、准确且有辨识度的简报标题，不直接复制或拼接检索主题、关注话题、关键词。紧凑排版，避免装饰性长CSS和重复复述；保留全部事件标题、原摘要、来源链接及有明确来源归属的差异和冲突，不展示独立不确定性栏目或不确定性条目，也不把争议事实表述为定论。关键事实已体现在摘要时不重复展开。目标控制在7000字符内。遵从输入语言与风格，只返回html字段。", _context(query, language, style, time_window) + "\n成功事件资料：" + EventBatch(events=events).model_dump_json())
         if not document.html.strip():
             raise ValueError("HTML_EMPTY")
         return document.html
