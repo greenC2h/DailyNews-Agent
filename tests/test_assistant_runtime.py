@@ -117,6 +117,30 @@ def test_tools_return_persisted_resources(monkeypatch, users):
     assert second["resources"] == [] and second["text"] == "后续回复"
 
 
+def test_search_history_passes_database_dependencies_by_name(monkeypatch, users):
+    """历史检索工具须按路由参数名传入会话与用户，避免误当时间范围。"""
+    from app.api import history as history_api
+
+    user, _, factory = users
+    captured = {}
+
+    def fake_history(query, limit, start=None, end=None, published_start=None,
+                     published_end=None, include_terms=(), exclude_terms=(), db=None, user=None):
+        """记录历史路由实际收到的依赖和过滤条件。"""
+        captured.update(locals())
+        return {"query": query, "items": []}
+
+    monkeypatch.setattr(history_api, "history", fake_history)
+    tool = next(item for item in runtime.business_tools(user.id, "history") if item.name == "search_history")
+    tool.func(query="汽车")
+
+    assert captured["db"].get(User, user.id) is not None
+    assert captured["user"].id == user.id
+    assert captured["start"] is None and captured["end"] is None
+    assert captured["include_terms"] == [] and captured["exclude_terms"] == []
+    assert captured["limit"] == 20
+
+
 def test_publish_and_schedule_replay_are_idempotent(users):
     """已持久化工具调用重新执行不会重复发布即时或定时任务。"""
     from app.api.news import BriefingRequest

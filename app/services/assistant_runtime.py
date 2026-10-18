@@ -99,7 +99,10 @@ def business_tools(user_id: str, thread_key: str) -> list:
         if not 2 <= len(query) <= 200 or not 1 <= limit <= 20:
             raise ValueError("历史检索关键词长度须为 2 至 200，条数须为 1 至 20")
         with SessionLocal() as db:
-            return _tool_result("history", history(query, limit, db, _owned_user(db, user_id)))
+            return _tool_result("history", history(
+                query=query, limit=limit, db=db, user=_owned_user(db, user_id),
+                include_terms=[], exclude_terms=[],
+            ))
 
     @tool
     def ask_user(question: str, options: list[str] | None = None) -> str:
