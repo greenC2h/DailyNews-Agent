@@ -156,7 +156,7 @@ def generate_html(events: list[EventRecord], query: str, language: str, style: d
     if not events:
         return ""
     try:
-        document = _invoke(HtmlDocument, "当前为独立HTML阶段：只根据成功事件资料生成完整自包含HTML文档。保留全部成功事件、摘要、关键事实、冲突和对应来源，遵从输入语言与风格。只返回html字段。", _context(query, language, style, time_window) + "\n标题：" + query + " 新闻简报\n成功事件资料：" + EventBatch(events=events).model_dump_json())
+        document = _invoke(HtmlDocument, "当前为独立HTML阶段：只根据成功事件资料生成完整自包含HTML文档。紧凑排版，避免装饰性长CSS和重复复述；保留全部事件标题、原摘要、来源链接及差异、冲突和不确定性，关键事实已体现在摘要时不重复展开。目标控制在7000字符内。遵从输入语言与风格，只返回html字段。", _context(query, language, style, time_window) + "\n标题：" + query + " 新闻简报\n成功事件资料：" + EventBatch(events=events).model_dump_json())
         if not document.html.strip():
             raise ValueError("HTML_EMPTY")
         return document.html
