@@ -1,11 +1,12 @@
 """具有崩溃边界和有限重试的邮件投递事务。"""
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 import smtplib
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.db.news_models import Briefing, MailDelivery
 from app.services.mailer import send_html_email
+from app.config import get_settings
+from app.services.html_storage import HtmlStorageError, read_stored_html
 
 UNKNOWN_ERRORS = (TimeoutError, ConnectionError, smtplib.SMTPServerDisconnected)
 
@@ -30,8 +31,8 @@ def deliver(db: Session, briefing: Briefing, recipient: str, original: MailDeliv
     record = MailDelivery(user_id=briefing.user_id, briefing_id=briefing.id, recipient_email=recipient, status="sending", attempts=0, original_id=original.id if original else None, lease_expires_at=datetime.now(timezone.utc) + timedelta(minutes=2))
     db.add(record); db.commit(); db.refresh(record)
     try:
-        html = Path(briefing.html_path).read_text(encoding="utf-8")
-    except OSError:
+        html = read_stored_html(briefing, get_settings().html_root).decode("utf-8")
+    except (HtmlStorageError, UnicodeDecodeError):
         record.status = "failed"; record.last_error = "HTML_UNAVAILABLE"; record.lease_expires_at = None; db.commit()
         return record
     for attempt in range(2):

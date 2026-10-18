@@ -1,8 +1,5 @@
 """按时间和权限检索历史事件，并持久化只引用原事件的专题简报。"""
 from datetime import datetime, timezone
-from pathlib import Path
-from uuid import uuid4
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
@@ -14,6 +11,7 @@ from app.db.models import User
 from app.db.news_models import Briefing
 from app.services.generation import EventRecord, EventSource, generate_html
 from app.services.rag import HistoryMatches, VectorMatches, milvus_status, search_events, vector_event_ids
+from app.services.html_storage import apply_stored_html, commit_stored_html, store_html
 
 router = APIRouter(prefix="/api/v1/history", tags=["history"])
 
@@ -151,15 +149,11 @@ def create_history_briefing(payload: HistoryBriefingRequest, db: Session = Depen
                          "published_start": payload.published_start.isoformat() if payload.published_start else None,
                          "published_end": payload.published_end.isoformat() if payload.published_end else None},
         )
-        root = get_settings().html_root / user.id
-        root.mkdir(parents=True, exist_ok=True)
-        path = root / f"{briefing.id}.html"
-        temporary = path.with_suffix(".tmp")
-        temporary.write_text(html, encoding="utf-8")
-        temporary.replace(path)
-        briefing.html_path = str(path.resolve())
+        root = get_settings().html_root
+        stored_html = store_html(root, user.id, briefing.id, html)
+        apply_stored_html(briefing, stored_html)
         briefing.status = "succeeded"
-        db.commit()
+        commit_stored_html(db, briefing, stored_html, root)
     except Exception as exc:
         db.rollback()
         failed = db.get(Briefing, briefing.id)

@@ -1,6 +1,5 @@
 """即时新闻简报 API。"""
 from datetime import datetime, timezone
-from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, Header
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -13,6 +12,7 @@ from app.services.news import fetch_articles
 from app.db.news_models import GenerationTask
 from app.services.tasking import publish_immediate
 from app.db.news_models import MailDelivery
+from app.services.html_storage import HtmlStorageError, read_stored_html
 
 router = APIRouter(prefix="/api/v1/news", tags=["news"])
 settings = get_settings()
@@ -102,15 +102,21 @@ def view_briefing_html(briefing_id: str, response: Response, db: Session = Depen
     """以内联方式展示已授权简报 HTML，并通过 CSP 隔离内容。"""
     briefing = db.query(Briefing).filter(Briefing.id == briefing_id, Briefing.user_id == user.id).first()
     if not briefing: raise HTTPException(404, detail={"code":"NOT_FOUND","message":"简报不存在"})
-    if not briefing.html_path or not Path(briefing.html_path).is_file(): raise HTTPException(404, detail={"code":"HTML_UNAVAILABLE","message":"该历史查询没有 HTML 简报"})
+    try:
+        content = read_stored_html(briefing, settings.html_root)
+    except HtmlStorageError as exc:
+        raise HTTPException(404, detail={"code":"HTML_UNAVAILABLE","message":"该历史查询没有 HTML 简报"}) from exc
     response.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    return Response(Path(briefing.html_path).read_bytes(), media_type="text/html; charset=utf-8", headers=dict(response.headers))
+    return Response(content, media_type="text/html; charset=utf-8", headers=dict(response.headers))
 
 @router.get("/briefings/{briefing_id}/download")
 def download_briefing(briefing_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
     """下载当前用户已保存的原始简报 HTML。"""
     briefing = db.query(Briefing).filter(Briefing.id == briefing_id, Briefing.user_id == user.id).first()
     if not briefing: raise HTTPException(404, detail={"code":"NOT_FOUND","message":"简报不存在"})
-    if not briefing.html_path or not Path(briefing.html_path).is_file(): raise HTTPException(404, detail={"code":"HTML_UNAVAILABLE","message":"该历史查询没有 HTML 简报"})
-    return Response(Path(briefing.html_path).read_bytes(), media_type="text/html; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="{briefing.id}.html"', "X-Content-Type-Options":"nosniff"})
+    try:
+        content = read_stored_html(briefing, settings.html_root)
+    except HtmlStorageError as exc:
+        raise HTTPException(404, detail={"code":"HTML_UNAVAILABLE","message":"该历史查询没有 HTML 简报"}) from exc
+    return Response(content, media_type="text/html; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="{briefing.id}.html"', "X-Content-Type-Options":"nosniff"})

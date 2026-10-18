@@ -4,7 +4,6 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 import logging
-from pathlib import Path
 from threading import Event, Thread
 import time
 from uuid import uuid4
@@ -19,6 +18,7 @@ from app.services.news import fetch_articles
 from app.services.rag import index_events
 from app.services.tasking import user_snapshot
 from app.services.delivery import deliver, recover_mail
+from app.services.html_storage import apply_stored_html, commit_stored_html, store_html
 
 logger = logging.getLogger("dailynews.worker")
 
@@ -105,13 +105,11 @@ def process_task(task_id: str) -> None:
                     source = event.sources[0]
                     saved = NewsEvent(briefing_id=briefing.id, user_id=user.id, title=event.title, source=source.source, url=source.url, published_at=datetime.fromisoformat(source.published_at), summary=event.summary, facts=event.model_dump())
                     db.add(saved); saved_events.append(saved)
-                directory = settings.html_root / user.id; directory.mkdir(parents=True, exist_ok=True)
-                path = directory / f"{briefing.id}.html"; temporary = path.with_suffix(".tmp")
-                temporary.write_text(html, encoding="utf-8"); temporary.replace(path)
-                briefing.html_path = str(path.resolve()); briefing.event_ids = [event.id for event in saved_events]
+                stored_html = store_html(settings.html_root, user.id, briefing.id, html)
+                apply_stored_html(briefing, stored_html); briefing.event_ids = [event.id for event in saved_events]
                 task.briefing_id = briefing.id; task.status = "succeeded"; task.error_code = None
                 task.intermediate = None; task.intermediate_expires_at = None
-                execution.event_count = len(saved_events); db.commit()
+                execution.event_count = len(saved_events); commit_stored_html(db, briefing, stored_html, settings.html_root)
                 try:
                     index_events(saved_events, db=db)
                 except Exception as exc:

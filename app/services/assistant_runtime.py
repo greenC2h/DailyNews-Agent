@@ -142,6 +142,10 @@ def _persistence(thread_key: str):
         if not acquired:
             raise HTTPException(409, detail={"code": "THREAD_BUSY", "message": "该对话正在处理，请稍后重试"})
         try:
+            # 连接到新 schema 或恢复后的数据库时，启动阶段初始化可能未覆盖当前搜索路径。
+            # setup() 使用 IF NOT EXISTS，可在持有全局线程锁后安全幂等执行。
+            checkpointer.setup()
+            store.setup()
             yield checkpointer, store
         finally:
             lock_connection.execute("SELECT pg_advisory_unlock(%s)", (_lock_key(thread_key),))
