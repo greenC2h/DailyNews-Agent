@@ -1,6 +1,6 @@
 # DailyNews
 
-DailyNews 核心功能已实现，正在完成真实集成验收。每日定时推送、模型与 Embedding、Worker、历史检索及持久对话已有真实环境验证；尚未完成的验收项和已知问题见《实施进度.md》。
+DailyNews 核心功能已实现，正在完成真实集成验收。每日定时推送、模型与 Embedding、Worker、历史检索及持久对话已有真实环境验证；尚未完成的验收项和已知问题见 `doc/实施进度.md`。
 
 ## 本地启动
 
@@ -20,8 +20,8 @@ uv run uvicorn main:app --host 127.0.0.1 --port 8000
 
 ## 验证
 
-先构建前端，再运行 `uv run python -m pytest -q`。测试使用临时数据库和目录；外部模型、SMTP、Milvus 的真实验收另行记录于《实施进度.md》，自动化测试不能替代它们。
+先构建前端，再运行 `uv run python -m pytest -q`。测试使用临时数据库和目录；外部模型、SMTP、Milvus 的真实验收另行记录于 `doc/实施进度.md`，自动化测试不能替代它们。
 
-Milvus 只通过 `uv run python -m app.cli init-milvus` 显式初始化。修改 Embedding 模型或维度时使用新 collection 名，不删除或原地覆盖已有 collection。外部服务真实验收状态及未完成项见《实施进度.md》。
+Milvus 只通过 `uv run python -m app.cli init-milvus` 显式初始化。修改 Embedding 模型或维度时使用新 collection 名，不删除或原地覆盖已有 collection。外部服务真实验收状态及未完成项见 `doc/实施进度.md`。
 
 HTML 简报保存于 `HTML_ROOT` 下，2026-10-18 后的新记录在数据库中保存相对路径、字节数和 SHA-256；旧绝对路径记录仍可读取。数据库提交失败时，刚写入的文件会被删除；无法删除时会隔离到 `HTML_ROOT/.orphaned/` 并写入应用错误日志，该目录不会由预览或下载接口提供。
