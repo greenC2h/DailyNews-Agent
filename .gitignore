@@ -16,6 +16,7 @@ frontend/dist/
 
 # 本地需求、设计和验收记录，不上传 GitHub
 /doc/
+/AGENTS.md
 
 
 .env
