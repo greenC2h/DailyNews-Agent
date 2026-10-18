@@ -106,7 +106,7 @@ def view_briefing_html(briefing_id: str, response: Response, db: Session = Depen
         content = read_stored_html(briefing, settings.html_root)
     except HtmlStorageError as exc:
         raise HTTPException(404, detail={"code":"HTML_UNAVAILABLE","message":"该历史查询没有 HTML 简报"}) from exc
-    response.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
+    response.headers["Content-Security-Policy"] = "default-src 'none'; sandbox allow-popups allow-popups-to-escape-sandbox; style-src 'unsafe-inline'; img-src https: data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
     response.headers["X-Content-Type-Options"] = "nosniff"
     return Response(content, media_type="text/html; charset=utf-8", headers=dict(response.headers))
 

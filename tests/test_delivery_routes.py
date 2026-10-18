@@ -60,3 +60,4 @@ def test_preview_returns_html_with_script_blocking_policy(client, tmp_path):
     assert response.headers["content-type"].startswith("text/html")
     assert response.text.startswith("<!doctype html>")
     assert "default-src 'none'" in response.headers["content-security-policy"]
+    assert "sandbox allow-popups allow-popups-to-escape-sandbox" in response.headers["content-security-policy"]
