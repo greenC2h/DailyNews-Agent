@@ -48,7 +48,7 @@ const Workbench = {
     const editing = ref(false)
     const settings = reactive({ nickname:'', timezone:'Asia/Shanghai', topics:'', keywords:'', language:'zh-CN', daily_push_time:'', max_events:5, summary_max_chars:400, layout:'list', sort:'latest', detail:'' })
     const settingsBaseline = ref({}); const settingsVersion = ref(null)
-    const historyForm = reactive({ query:'', start:'', end:'', limit:20 }); const history = ref(null)
+    const historyForm = reactive({ query:'', start:'', end:'', limit:20 }); const history = ref(null); const historyBriefing = ref(null)
     const threadId = ref(''); const messages = ref([]); const draft = ref(''); const streaming = ref(false); const chatRecovery = ref(false); const interrupt = ref(null)
     const interruptions = ref([]); const resumeAnswers = reactive({}); const approvalChoices = reactive({}); const resources = ref([])
     let chatController; let pollTimer; let polling = false; let disposed = false; let sessionEpoch = 0
@@ -216,6 +216,17 @@ const Workbench = {
         history.value = await api(`/history?${params}`)
       })
     }
+    /** 仅根据已检索历史事件生成专题简报，不触发新闻采集或邮件发送。 */
+    async function createHistoryBriefing() {
+      await perform('history-briefing', async () => {
+        const body = { query:historyForm.query, limit:Math.min(historyForm.limit,20) }
+        if (historyForm.start && historyForm.end) {
+          body.start = zonedDateTime(historyForm.start,store.user.timezone); body.end = zonedDateTime(historyForm.end,store.user.timezone)
+        }
+        historyBriefing.value = await api('/history/briefings', { method:'POST', body })
+        if (historyBriefing.value.id && historyBriefing.value.status === 'succeeded') notice.value = '历史专题简报已生成，可在下方查看或下载。'
+      })
+    }
     /** 从服务端恢复最近消息和持久化中断，不重新发送消息。 */
     async function reloadConversation() {
       const result = await api(`/chat/${encodeURIComponent(threadId.value)}`)
@@ -285,7 +296,7 @@ const Workbench = {
     watch(() => route.fullPath,loadPage)
     onMounted(async () => { await restoreSession(); pollTimer = setInterval(tick,4000) })
     onUnmounted(() => { disposed = true; clearInterval(pollTimer); chatController?.abort() })
-    return { navigation,store,initialized,busy,error,notice,authMode,auth,page,title,briefings,schedules,selectedTask,executions,briefing,deliveries,instant,taskForm,editing,settings,historyForm,history,threadId,messages,draft,streaming,chatRecovery,interrupt,interruptions,resumeAnswers,approvalChoices,resources,newConversation,resumeChat,authenticate,logout,generate,cancelGeneration,retryGeneration,loadPage,loadBriefings,loadSchedules,loadBriefing,mailAction,newTask,inspectTask,editTask,saveTask,scheduleAction,saveSettings,searchHistory,sendChat,recoverChat,formatDate,sourceUrl,labels,allowed,showError }
+    return { navigation,store,initialized,busy,error,notice,authMode,auth,page,title,briefings,schedules,selectedTask,executions,briefing,deliveries,instant,taskForm,editing,settings,historyForm,history,threadId,messages,draft,streaming,chatRecovery,interrupt,interruptions,resumeAnswers,approvalChoices,resources,newConversation,resumeChat,authenticate,logout,generate,cancelGeneration,retryGeneration,loadPage,loadBriefings,loadSchedules,loadBriefing,mailAction,newTask,inspectTask,editTask,saveTask,scheduleAction,saveSettings,searchHistory,createHistoryBriefing,sendChat,recoverChat,formatDate,sourceUrl,labels,allowed,showError }
   }, template,
 }
 const router = createRouter({ history:createWebHashHistory(), routes:[...navigation.map(item => ({ path:item.path,name:item.name,component:Workbench })),{ path:'/briefings/:id',name:'briefing',component:Workbench },{ path:'/login',name:'login',component:Workbench },{ path:'/:pathMatch(.*)*',redirect:'/' }] })

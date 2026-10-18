@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     deepseek_base_url: str | None = None
     model_base_url: str | None = None
     model_name: str | None = None
+    model_request_timeout_seconds: int = 60
     news_model_name: str | None = None
     embedding_api_key: str | None = None
     embedding_base_url: str | None = None
@@ -40,6 +41,7 @@ class Settings(BaseSettings):
     open_sandbox_base_url: str | None = None
     open_sandbox_id: str | None = None
     open_sandbox_command_timeout: int = 60
+    open_sandbox_connect_timeout_seconds: int = 10
     rss_timeout_seconds: float = 15.0
     news_retry_attempts: int = 2
     news_retry_backoff_seconds: float = 0.3

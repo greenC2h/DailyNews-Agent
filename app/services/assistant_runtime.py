@@ -17,6 +17,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.store.postgres import PostgresStore
 from langgraph.types import Command, interrupt
+from psycopg import connect
 from sqlalchemy.engine import make_url
 
 from app.config import get_settings
@@ -116,27 +117,26 @@ def _lock_key(value: str) -> int:
 
 @contextmanager
 def _persistence(thread_key: str):
-    """持有线程级会话锁，关闭连接时自动释放，初始化数据库结构时另行串行。"""
+    """持有独立线程锁并提供 Checkpointer/Store，避免锁住其写入连接。"""
     settings = get_settings()
     if not settings.database_url or make_url(settings.database_url).get_backend_name() != "postgresql":
         raise HTTPException(503, detail={"code": "PERSISTENCE_REQUIRED", "message": "助手需要 PostgreSQL 持久化配置"})
     dsn = make_url(settings.database_url).set(drivername="postgresql").render_as_string(hide_password=False)
-    with PostgresSaver.from_conn_string(dsn) as checkpointer, PostgresStore.from_conn_string(dsn) as store:
-        connection = checkpointer.conn
-        acquired = connection.execute("SELECT pg_try_advisory_lock(%s) AS acquired", (_lock_key(thread_key),)).fetchone()["acquired"]
+    with connect(dsn, autocommit=True) as lock_connection, PostgresSaver.from_conn_string(dsn) as checkpointer, PostgresStore.from_conn_string(dsn) as store:
+        acquired = bool(lock_connection.execute("SELECT pg_try_advisory_lock(%s)", (_lock_key(thread_key),)).fetchone()[0])
         if not acquired:
             raise HTTPException(409, detail={"code": "THREAD_BUSY", "message": "该对话正在处理，请稍后重试"})
         try:
             # 两种持久化组件共享数据库 schema，避免并发首启迁移相互竞争。
-            connection.execute("SELECT pg_advisory_lock(%s)", (_lock_key("dailynews:assistant:schema"),))
+            lock_connection.execute("SELECT pg_advisory_lock(%s)", (_lock_key("dailynews:assistant:schema"),))
             try:
                 checkpointer.setup()
                 store.setup()
             finally:
-                connection.execute("SELECT pg_advisory_unlock(%s)", (_lock_key("dailynews:assistant:schema"),))
+                lock_connection.execute("SELECT pg_advisory_unlock(%s)", (_lock_key("dailynews:assistant:schema"),))
             yield checkpointer, store
         finally:
-            connection.execute("SELECT pg_advisory_unlock(%s)", (_lock_key(thread_key),))
+            lock_connection.execute("SELECT pg_advisory_unlock(%s)", (_lock_key(thread_key),))
 
 
 def _build_agent(user: User, thread_key: str, checkpointer, store):
@@ -150,7 +150,12 @@ def _build_agent(user: User, thread_key: str, checkpointer, store):
         f"openai:{settings.model_name}",
         HarnessProfile(general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False)),
     )
-    model = ChatOpenAI(model=settings.model_name, api_key=settings.model_api_key, base_url=settings.deepseek_base_url, temperature=0, extra_body={"thinking": {"type": "disabled"}})
+    model = ChatOpenAI(
+        model=settings.model_name, api_key=settings.model_api_key,
+        base_url=settings.deepseek_base_url, temperature=0, max_retries=1,
+        request_timeout=settings.model_request_timeout_seconds,
+        extra_body={"thinking": {"type": "disabled"}},
+    )
     def private_namespace(runtime) -> tuple[str, str]:
         """将框架归档及工具结果限定在已认证账号命名空间。"""
         return "dailynews", user.id
@@ -201,8 +206,8 @@ def assistant_turn(message: str, user: User, thread_id: str, resume=None) -> dic
     Raises:
         HTTPException: 配置缺失、线程忙碌或中断恢复状态不匹配。
     """
-    if not thread_id or len(thread_id) > 200:
-        raise HTTPException(422, detail={"code": "INVALID_THREAD", "message": "对话编号长度须为 1 至 200"})
+    if not thread_id or len(thread_id) > 100:
+        raise HTTPException(422, detail={"code": "INVALID_THREAD", "message": "对话编号长度须为 1 至 100"})
     thread_key = f"{user.id}::{thread_id}"
     config = {"configurable": {"thread_id": thread_key}, "recursion_limit": 50}
     with _persistence(thread_key) as (checkpointer, store):
@@ -216,3 +221,22 @@ def assistant_turn(message: str, user: User, thread_id: str, resume=None) -> dic
         previous_ids = {item.id for item in state.values.get("messages", [])}
         graph_input = Command(resume=resume) if resume is not None else {"messages": [{"role": "user", "content": message}]}
         return _result_payload(agent.invoke(graph_input, config), previous_ids)
+
+
+def pending_interrupts(user: User, thread_id: str) -> list[dict]:
+    """读取当前用户线程的持久化中断，供刷新后的页面恢复补问或审批。
+
+    Args:
+        user: 已认证用户，用于构造私有线程键。
+        thread_id: 前端线程标识。
+
+    Returns:
+        当前线程尚未恢复的中断资料；不存在检查点时返回空列表。
+    """
+    if not thread_id or len(thread_id) > 100:
+        raise HTTPException(422, detail={"code": "INVALID_THREAD", "message": "对话编号长度须为 1 至 100"})
+    thread_key = f"{user.id}::{thread_id}"
+    config = {"configurable": {"thread_id": thread_key}}
+    with _persistence(thread_key) as (checkpointer, store):
+        agent = _build_agent(user, thread_key, checkpointer, store)
+        return [{"id": item.id, "value": jsonable_encoder(item.value)} for item in agent.get_state(config).interrupts]

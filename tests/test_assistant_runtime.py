@@ -9,6 +9,8 @@ from uuid import uuid4
 import pytest
 from deepagents import create_deep_agent
 from deepagents.backends import StateBackend
+from deepagents.backends.protocol import ExecuteResponse, FileDownloadResponse, FileUploadResponse
+from deepagents.backends.sandbox import BaseSandbox
 from fastapi import HTTPException
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -184,6 +186,111 @@ def test_execute_shows_full_command_and_needs_approval():
     result = agent.invoke(Command(resume={"decisions": [{"type": "reject", "message": "不执行"}]}), rejected_config)
     assert invoked == ["python report.py --limit 3"]
     assert result["messages"][-1].content == "操作已拒绝。"
+
+
+def test_production_agent_routes_sandbox_and_resume(monkeypatch, users):
+    """生产图组装使用共享沙箱、要求显式审批并恢复补问及命令结果。"""
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    user = users[0]
+    commands = []
+    saver, store = InMemorySaver(), InMemoryStore()
+    model = ScriptedModel(responses=[
+        AIMessage(content="", tool_calls=[{"name": "ask_user", "args": {"question": "查询哪个日期？"}, "id": "prod-q"}]),
+        AIMessage(content="已根据回答准备好了。"),
+        AIMessage(content="", tool_calls=[{"name": "execute", "args": {"command": "python3 --version"}, "id": "prod-exec"}]),
+        AIMessage(content="命令结果已返回。"),
+    ])
+
+    class FakeSharedSandbox(BaseSandbox):
+        """隔离测试用远端沙箱代替，不提供宿主回退。"""
+
+        @property
+        def id(self):
+            """返回测试沙箱标识。"""
+            return "shared-test"
+
+        def execute(self, command, *, timeout=None):
+            """记录获批后才抵达沙箱的显式命令。"""
+            commands.append(command)
+            return ExecuteResponse(output="Python 3.12", exit_code=0)
+
+        def upload_files(self, files):
+            """报告测试上传结果。"""
+            return [FileUploadResponse(path=path) for path, _ in files]
+
+        def download_files(self, paths):
+            """报告测试下载结果。"""
+            return [FileDownloadResponse(path=path, content=b"") for path in paths]
+
+    @contextmanager
+    def persistence(thread_key):
+        """提供跨调用的测试检查点。"""
+        yield saver, store
+
+    import app.services.sandbox as sandbox
+
+    monkeypatch.setattr(runtime, "_persistence", persistence)
+    monkeypatch.setattr(runtime, "ChatOpenAI", lambda **kwargs: model)
+    monkeypatch.setattr(runtime, "get_settings", lambda: SimpleNamespace(
+        model_api_key="test-key", model_name="assistant-test", deepseek_base_url=None,
+        model_request_timeout_seconds=60,
+    ))
+    monkeypatch.setattr(sandbox, "SharedSandboxBackend", FakeSharedSandbox)
+
+    question = runtime.assistant_turn("帮我准备简报", user, "production")
+    assert question["interrupts"][0]["value"]["question"] == "查询哪个日期？"
+    answered = runtime.assistant_turn("", user, "production", resume="昨天")
+    assert answered["text"] == "已根据回答准备好了。"
+    approval = runtime.assistant_turn("检查 Python 版本", user, "production")
+    request = approval["interrupts"][0]["value"]["action_requests"][0]
+    assert request["args"]["command"] == "python3 --version"
+    assert commands == []
+    done = runtime.assistant_turn("", user, "production", resume={"decisions": [{"type": "approve"}]})
+    assert commands == ["python3 --version"]
+    assert done["text"] == "命令结果已返回。"
+
+
+def test_pending_interrupts_can_be_reloaded(monkeypatch, users):
+    """页面刷新后仍能从持久检查点读回同一用户的待补问。"""
+    user = users[0]
+    scripted_runtime(monkeypatch, [
+        AIMessage(content="", tool_calls=[{"name": "ask_user", "args": {"question": "需要哪个范围？"}, "id": "reload-q"}]),
+    ])
+    runtime.assistant_turn("生成简报", user, "reload-thread")
+    pending = runtime.pending_interrupts(user, "reload-thread")
+    assert len(pending) == 1
+    assert pending[0]["value"] == {"type": "question", "question": "需要哪个范围？", "options": []}
+
+
+def test_shared_sandbox_is_lazy(monkeypatch):
+    """普通图构建仅保存固定实例信息，首次命令才连接远端沙箱。"""
+    from types import SimpleNamespace
+    from app.services import sandbox
+
+    connections = []
+
+    class Remote:
+        """提供最小命令接口的远端实例替身。"""
+
+        def __init__(self):
+            """初始化可观察命令服务。"""
+            self.commands = SimpleNamespace(run=lambda *args, **kwargs: SimpleNamespace(exit_code=0))
+
+        def close(self):
+            """模拟关闭连接。"""
+
+    monkeypatch.setattr(sandbox, "get_settings", lambda: SimpleNamespace(
+        open_sandbox_id="shared-id", open_sandbox_base_url="http://sandbox.local",
+        open_sandbox_api_key="test", open_sandbox_command_timeout=10,
+        open_sandbox_connect_timeout_seconds=10,
+    ))
+    monkeypatch.setattr(sandbox.SandboxSync, "connect", lambda *args, **kwargs: connections.append(Remote()) or connections[-1])
+    backend = sandbox.SharedSandboxBackend()
+    assert backend.id == "shared-id" and connections == []
+    assert backend.execute("printf ok").exit_code == 0
+    assert len(connections) == 1
 
 
 def test_invalid_thread_is_rejected(users):

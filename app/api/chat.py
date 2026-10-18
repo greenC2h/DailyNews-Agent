@@ -10,13 +10,13 @@ from app.api.auth import current_user
 from app.db.database import get_db
 from app.db.models import User
 from app.db.news_models import ConversationMessage
-from app.services.assistant_runtime import assistant_turn
+from app.services.assistant_runtime import assistant_turn, pending_interrupts
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 class ChatRequest(BaseModel):
     """新消息请求。"""
     message: str = Field(min_length=1, max_length=4000)
-    thread_id: str | None = Field(default=None, max_length=200)
+    thread_id: str | None = Field(default=None, max_length=100)
 class ResumeRequest(BaseModel):
     """补问或显式命令审批恢复请求。"""
     resume: object
@@ -57,5 +57,5 @@ def resume_chat(thread_id: str, payload: ResumeRequest, user: User = Depends(cur
 def conversation(thread_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
     """返回用户私有会话归档及 PostgreSQL Checkpointer 中待处理审批。"""
     rows = db.scalars(select(ConversationMessage).where(ConversationMessage.user_id == user.id, ConversationMessage.thread_id == thread_id).order_by(ConversationMessage.created_at.desc()).limit(40)).all()
-    # checkpointer API 不在这里建立额外连接，未保存的最后一次状态由恢复时继续读取。
-    return {"thread_id":thread_id,"messages":[{"role":row.role,"content":row.content,"created_at":row.created_at} for row in reversed(rows)],"interrupts":[]}
+    interrupts = pending_interrupts(user, thread_id)
+    return {"thread_id":thread_id,"messages":[{"role":row.role,"content":row.content,"created_at":row.created_at} for row in reversed(rows)],"interrupts":interrupts}
