@@ -56,12 +56,6 @@ Web 服务和 Worker 是两个独立进程；要执行定时简报，二者都�
 
 ## 🚀 启动指南
 
-### Windows 一键启动
-
-完成首次配置后，可直接双击项目根目录的 `启动DailyNews.bat`。脚本会自动同步依赖、构建前端、执行数据库迁移、启动 Web 服务和 Worker，并在 `http://127.0.0.1:8000/healthz` 就绪后打开浏览器。关闭启动窗口会停止本次启动的两个服务进程。
-
-启动日志位于 `data/logs/`；若启动失败，优先查看 `web-error.log` 和 `worker-error.log`。首次启动可能需要较长时间安装依赖和构建前端。
-
 ### 环境要求
 
 - Git、Python 3.12 或更新版本，以及 [`uv`](https://docs.astral.sh/uv/)
@@ -71,7 +65,7 @@ Web 服务和 Worker 是两个独立进程；要执行定时简报，二者都�
 
 启动前，请准备 PostgreSQL 数据库和模型服务凭据。
 
-### 1. 配置环境
+### 1. 首次配置环境
 
 克隆项目，再复制 `.env.example` 为 `.env`。以下命令使用 PowerShell：
 
@@ -96,7 +90,19 @@ NEWS_MODEL_NAME=your-provider-model-name
 
 请先创建数据库；Alembic 负责创建表，不会创建数据库本身。数据库账号需要建表权限。连接 URL 密码中的特殊字符需要 URL 编码，也可改用分开的 `DB_*` 参数。两个模型名称均需替换为供应商实际支持的名称；使用其他兼容供应商时，同时修改 `DEEPSEEK_BASE_URL`。`MODEL_NAME` 用于助手对话，`NEWS_MODEL_NAME` 用于简报生成。
 
-### 2. 安装依赖、迁移数据库并构建前端
+完成首次配置后，下面两种启动方式任选其一，不需要重复执行。
+
+### 方案 A：Windows 一键启动（推荐）
+
+直接双击项目根目录的 `启动DailyNews.bat`。脚本会自动同步依赖、构建前端、执行数据库迁移、启动 Web 服务和 Worker，并在 `http://127.0.0.1:8000/healthz` 就绪后打开浏览器。关闭启动窗口会停止本次启动的两个服务进程。
+
+启动日志位于 `data/logs/`；若启动失败，优先查看 `web-error.log` 和 `worker-error.log`。首次启动可能需要较长时间安装依赖和构建前端。
+
+### 方案 B：分步启动（调试或开发）
+
+适合需要分别查看日志、单独重启 Web/Worker 或调试前端的场景。
+
+#### 2. 安装依赖、迁移数据库并构建前端
 
 ```powershell
 uv sync
@@ -105,7 +111,7 @@ npm --prefix frontend run build
 uv run alembic upgrade head
 ```
 
-### 3. 启动 API 和 Worker
+#### 3. 启动 API 和 Worker
 
 在仓库根目录打开两个终端。
 
@@ -125,7 +131,9 @@ uv run python -m app.worker
 
 首次体验时填写主题和明确的新闻起止时间，提交立即生成任务。生成期间保持 Worker 终端运行，完成后即可预览或下载简报。启用邮件发送或定时推送前，请先配置 SMTP。`/healthz` 只检查 Web 服务的数据库连接，不检查 Worker 或外部供应商。
 
-开发前端时可改用 Vite：执行 `npm --prefix frontend run dev` 并访问 [http://localhost:5173](http://localhost:5173)。开发服务器会将 `/api` 请求代理到 8000 端口；API 进程仍需保持运行。
+#### 4. 可选：启动 Vite 开发服务器
+
+开发前端时执行 `npm --prefix frontend run dev` 并访问 [http://localhost:5173](http://localhost:5173)。开发服务器会将 `/api` 请求代理到 8000 端口；API 进程仍需保持运行。
 
 ## 🔌 按需连接你的服务
 

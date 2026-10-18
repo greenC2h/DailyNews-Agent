@@ -58,12 +58,6 @@ The web service and Worker are separate processes and must both remain running f
 
 ## 🚀 Getting Started
 
-### One-click startup on Windows
-
-After the initial configuration, double-click `启动DailyNews.bat` in the repository root. The launcher synchronizes dependencies, builds the frontend, applies database migrations, starts the Web service and Worker, then opens the browser after `http://127.0.0.1:8000/healthz` is ready. Closing the launcher window stops the two processes started by that run.
-
-Startup logs are written to `data/logs/`; check `web-error.log` and `worker-error.log` first when startup fails. The first run may take longer while dependencies are installed and the frontend is built.
-
 ### Requirements
 
 - Git, Python 3.12 or newer, and [`uv`](https://docs.astral.sh/uv/)
@@ -73,7 +67,7 @@ Startup logs are written to `data/logs/`; check `web-error.log` and `worker-erro
 
 Before starting, provision a PostgreSQL database and obtain credentials for your model provider.
 
-### 1. Configure the environment
+### 1. Configure the environment once
 
 Clone the project, then copy `.env.example` to `.env`. Commands below use PowerShell:
 
@@ -98,7 +92,19 @@ NEWS_MODEL_NAME=your-provider-model-name
 
 Create the database first; Alembic creates tables, not the database itself. The database user needs permission to create tables. URL-encode special characters in connection URL passwords, or use the separate `DB_*` settings. Replace both model names with a model your provider supports; for another compatible provider, also replace `DEEPSEEK_BASE_URL`. `MODEL_NAME` serves the assistant; `NEWS_MODEL_NAME` serves briefing generation.
 
-### 2. Install, migrate, and build
+After the initial configuration, choose one of the two startup paths below. You do not need to run both.
+
+### Option A: One-click startup on Windows (recommended)
+
+Double-click `启动DailyNews.bat` in the repository root. The launcher synchronizes dependencies, builds the frontend, applies database migrations, starts the Web service and Worker, then opens the browser after `http://127.0.0.1:8000/healthz` is ready. Closing the launcher window stops the two processes started by that run.
+
+Startup logs are written to `data/logs/`; check `web-error.log` and `worker-error.log` first when startup fails. The first run may take longer while dependencies are installed and the frontend is built.
+
+### Option B: Run services separately (development or debugging)
+
+Use this path when you need separate logs, independent restarts, or the Vite development server.
+
+#### 2. Install, migrate, and build
 
 ```powershell
 uv sync
@@ -107,7 +113,7 @@ npm --prefix frontend run build
 uv run alembic upgrade head
 ```
 
-### 3. Start the API and Worker
+#### 3. Start the API and Worker
 
 Open two terminals in the repository root.
 
@@ -127,7 +133,9 @@ Open [http://127.0.0.1:8000](http://127.0.0.1:8000), create an account, and conf
 
 For your first briefing, choose a topic and an explicit news time range, then submit an on-demand task. Keep the Worker terminal open while it runs; preview or download the result after completion. Configure SMTP before enabling email delivery or a scheduled push. `/healthz` checks the web service's database connection; it does not test the Worker or external providers.
 
-To use the Vite development server instead of the built frontend, run `npm --prefix frontend run dev` and open [http://localhost:5173](http://localhost:5173). The development server proxies `/api` to port 8000; keep the API process running as well.
+#### 4. Optional: start the Vite development server
+
+To develop the frontend, run `npm --prefix frontend run dev` and open [http://localhost:5173](http://localhost:5173). The development server proxies `/api` to port 8000; keep the API process running as well.
 
 ## 🔌 Connect your services
 
