@@ -1,6 +1,6 @@
 # DailyNews
 
-本项目仍处于实现和验收阶段，尚未达到全部基线要求。
+DailyNews 核心功能已实现，正在完成真实集成验收。每日定时推送、模型与 Embedding、Worker、历史检索及持久对话已有真实环境验证；尚未完成的验收项和已知问题见《实施进度.md》。
 
 ## 本地启动
 
@@ -22,4 +22,4 @@ uv run uvicorn main:app --host 127.0.0.1 --port 8000
 
 先构建前端，再运行 `uv run python -m pytest -q`。测试使用临时数据库和目录；外部模型、SMTP、Milvus 的真实验收另行记录于《实施进度.md》，自动化测试不能替代它们。
 
-Milvus 只通过 `uv run python -m app.cli init-milvus` 显式初始化。修改 Embedding 模型或维度时使用新 collection 名，不删除或原地覆盖已有 collection。当前 Embedding 服务的模型授权阻塞及尚未实现内容见《实施进度.md》。
+Milvus 只通过 `uv run python -m app.cli init-milvus` 显式初始化。修改 Embedding 模型或维度时使用新 collection 名，不删除或原地覆盖已有 collection。外部服务真实验收状态及未完成项见《实施进度.md》。
