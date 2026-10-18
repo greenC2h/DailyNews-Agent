@@ -71,8 +71,6 @@ const Workbench = {
     const instant = reactive({ query:'', start:'', end:'', limit:5 })
     const taskForm = reactive({ id:'', name:'', frequency:'daily', date:'', time:'08:00', timezone:'Asia/Shanghai', query:'', limit:5, articleLimitMode:'default', articleLimit:10, start:'', end:'', overrides:{} })
     const editing = ref(false)
-    const articleLimitMode = ref('default'); const articleLimitValue = ref(10)
-    const selectedEventLimit = computed(() => selectedTask.value?.is_default ? (store.user?.style?.max_events ?? 5) : (selectedTask.value?.limit ?? 5))
     const settings = reactive({ nickname:'', timezone:'Asia/Shanghai', topics:'', keywords:'', language:'zh-CN', daily_push_time:'', max_events:5, summary_max_chars:400, layout:'list', sort:'latest', detail:'' })
     const settingsBaseline = ref({}); const settingsVersion = ref(null)
     const historyForm = reactive({ query:'', start:'', end:'', limit:20 }); const history = ref(null); const historyBriefing = ref(null)
@@ -220,7 +218,7 @@ const Workbench = {
     /** 初始化新任务表单。 */
     function newTask() { Object.assign(taskForm, { id:'', name:'', frequency:'daily', date:'', time:'08:00', timezone:store.user.timezone, query:'', limit:5, articleLimitMode:'default', articleLimit:10, start:'', end:'', overrides:{} }); editing.value = true }
     /** 读取任务详情和最近执行，不从列表推测操作。 */
-    async function inspectTask(task) { await perform('inspect', async () => { selectedTask.value = await api(`/tasks/${task.id}`); articleLimitMode.value = selectedTask.value.article_limit == null ? 'default' : 'custom'; articleLimitValue.value = selectedTask.value.article_limit ?? selectedEventLimit.value * 2; const result = await api(`/tasks/${task.id}/executions`); executions.value = result.items || result }) }
+    async function inspectTask(task) { await perform('inspect', async () => { selectedTask.value = await api(`/tasks/${task.id}`); const result = await api(`/tasks/${task.id}/executions`); executions.value = result.items || result }) }
     /** 将任务原始时区和配置载入编辑表单。 */
     function editTask() {
       const task = selectedTask.value; const local = formDate(task.run_at, task.timezone)
@@ -239,17 +237,6 @@ const Workbench = {
         }
         await api(`/tasks${taskForm.id ? `/${taskForm.id}` : ''}`, { method:taskForm.id ? 'PATCH' : 'POST', key:crypto.randomUUID(), body:payload })
         editing.value = false; selectedTask.value = null; await loadSchedules(); notice.value = '定时任务已保存。'
-      })
-    }
-    /** 保存当前定时任务的文章采集上限，默认每日任务也可独立配置。 */
-    async function saveArticleLimit() {
-      await perform('article-limit', async () => {
-        const value = articleLimitMode.value === 'custom' ? Number(articleLimitValue.value) : null
-        if (value !== null && value < selectedEventLimit.value) throw new Error('原始文章采集上限不能低于事件数。')
-        selectedTask.value = await api(`/tasks/${selectedTask.value.id}/article-limit`, { method:'PATCH', body:{ article_limit:value } })
-        articleLimitValue.value = selectedTask.value.article_limit ?? selectedEventLimit.value * 2
-        notice.value = '原始文章采集上限已保存。'
-        await loadSchedules()
       })
     }
     /** 执行后端允许的暂停、恢复或取消，刷新任务状态。 */
@@ -358,7 +345,7 @@ const Workbench = {
     watch(() => route.fullPath,loadPage)
     onMounted(async () => { await restoreSession(); pollTimer = setInterval(tick,4000) })
     onUnmounted(() => { disposed = true; clearInterval(pollTimer); chatController?.abort() })
-    return { navigation,store,initialized,busy,error,notice,authMode,auth,page,title,briefings,latestLoading,schedules,selectedTask,selectedEventLimit,articleLimitMode,articleLimitValue,executions,briefing,deliveries,instant,taskForm,editing,settings,historyForm,history,historyBriefing,threadId,messages,draft,streaming,chatRecovery,interrupt,interruptions,resumeAnswers,approvalChoices,resources,newConversation,resumeChat,authenticate,logout,generate,cancelGeneration,retryGeneration,loadPage,loadBriefings,loadLatestBriefing,loadSchedules,loadBriefing,mailAction,newTask,inspectTask,editTask,saveTask,saveArticleLimit,scheduleAction,saveSettings,searchHistory,createHistoryBriefing,sendChat,recoverChat,formatDate,markdownToHtml,sourceUrl,labels,allowed,showError }
+    return { navigation,store,initialized,busy,error,notice,authMode,auth,page,title,briefings,latestLoading,schedules,selectedTask,executions,briefing,deliveries,instant,taskForm,editing,settings,historyForm,history,historyBriefing,threadId,messages,draft,streaming,chatRecovery,interrupt,interruptions,resumeAnswers,approvalChoices,resources,newConversation,resumeChat,authenticate,logout,generate,cancelGeneration,retryGeneration,loadPage,loadBriefings,loadLatestBriefing,loadSchedules,loadBriefing,mailAction,newTask,inspectTask,editTask,saveTask,scheduleAction,saveSettings,searchHistory,createHistoryBriefing,sendChat,recoverChat,formatDate,markdownToHtml,sourceUrl,labels,allowed,showError }
   }, template,
 }
 const router = createRouter({ history:createWebHashHistory(), routes:[...navigation.map(item => ({ path:item.path,name:item.name,component:Workbench })),{ path:'/briefings/:id',name:'briefing',component:Workbench },{ path:'/login',name:'login',component:Workbench },{ path:'/:pathMatch(.*)*',redirect:'/' }] })
