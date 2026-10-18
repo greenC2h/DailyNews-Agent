@@ -7,7 +7,7 @@ import './style.css'
 
 const terminal = new Set(['succeeded', 'no_events', 'generation_failed', 'cancelled', 'system_failed', 'failed'])
 const labels = { queued:'等待执行', running:'执行中', succeeded:'简报已生成', no_events:'没有符合条件的事件', generation_failed:'生成失败', system_failed:'系统失败', cancelled:'已取消', active:'已启用', paused:'已暂停', completed:'已完成', missed:'已错过', pending:'未发送', sending:'发送中', success:'已发送', failed:'失败', pending_confirmation:'发送结果待确认', collecting:'采集新闻', generating:'整理简报', indexing:'保存事件' }
-const navigation = [{ path:'/', name:'home', title:'今日简报' }, { path:'/assistant', name:'assistant', title:'问问助手' }, { path:'/briefings', name:'briefings', title:'我的简报' }, { path:'/tasks', name:'tasks', title:'定时任务' }, { path:'/history', name:'history', title:'历史检索' }, { path:'/settings', name:'settings', title:'账户与订阅' }]
+const navigation = [{ path:'/', name:'home', title:'今日简报' }, { path:'/assistant', name:'assistant', title:'新闻策展' }, { path:'/briefings', name:'briefings', title:'我的简报' }, { path:'/tasks', name:'tasks', title:'定时任务' }, { path:'/history', name:'history', title:'历史检索' }, { path:'/settings', name:'settings', title:'账户与订阅' }]
 
 /** 保存跨页面账号和任务摘要，不在本地保存密码或会话 Cookie。 */
 const useWorkspace = defineStore('workspace', () => {
@@ -31,6 +31,30 @@ function formDate(value, zone) {
 
 /** 将逗号或换行分隔的偏好转换为去重列表。 */
 function splitList(text) { return [...new Set(text.split(/[,，\n]/).map(value => value.trim()).filter(Boolean))] }
+
+/** 转义模型回复中的 HTML 特殊字符，确保 Markdown 渲染不会执行原始标签。 */
+function escapeMarkdownHtml(value) {
+  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
+/** 将助手常用 Markdown 语法转换为安全的轻量 HTML，保留换行和列表层级。 */
+function markdownToHtml(value) {
+  const lines = escapeMarkdownHtml(value).split(/\r?\n/)
+  const output = []; let list = ''
+  /** 关闭当前列表容器，避免不同列表类型嵌套到同一层。 */
+  const closeList = () => { if (list) { output.push(`</${list}>`); list = '' } }
+  for (const line of lines) {
+    const heading = line.match(/^(#{1,3})\s+(.+)$/); const bullet = line.match(/^\s*[-*]\s+(.+)$/); const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/)
+    if (heading) { closeList(); output.push(`<h${heading[1].length}>${heading[2]}</h${heading[1].length}>`); continue }
+    if (bullet || ordered) {
+      const type = bullet ? 'ul' : 'ol'; if (list !== type) { closeList(); list = type; output.push(`<${type}>`) }
+      output.push(`<li>${bullet ? bullet[1] : ordered[1]}</li>`); continue
+    }
+    closeList(); if (line.trim()) output.push(`<p>${line}</p>`)
+  }
+  closeList()
+  return output.join('').replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>').replace(/\n/g, '<br>')
+}
 
 const Workbench = {
   /** 初始化表单、用户状态、页面读取和持久化恢复生命周期。 */
@@ -319,7 +343,7 @@ const Workbench = {
     watch(() => route.fullPath,loadPage)
     onMounted(async () => { await restoreSession(); pollTimer = setInterval(tick,4000) })
     onUnmounted(() => { disposed = true; clearInterval(pollTimer); chatController?.abort() })
-    return { navigation,store,initialized,busy,error,notice,authMode,auth,page,title,briefings,latestLoading,schedules,selectedTask,executions,briefing,deliveries,instant,taskForm,editing,settings,historyForm,history,historyBriefing,threadId,messages,draft,streaming,chatRecovery,interrupt,interruptions,resumeAnswers,approvalChoices,resources,newConversation,resumeChat,authenticate,logout,generate,cancelGeneration,retryGeneration,loadPage,loadBriefings,loadLatestBriefing,loadSchedules,loadBriefing,mailAction,newTask,inspectTask,editTask,saveTask,scheduleAction,saveSettings,searchHistory,createHistoryBriefing,sendChat,recoverChat,formatDate,sourceUrl,labels,allowed,showError }
+    return { navigation,store,initialized,busy,error,notice,authMode,auth,page,title,briefings,latestLoading,schedules,selectedTask,executions,briefing,deliveries,instant,taskForm,editing,settings,historyForm,history,historyBriefing,threadId,messages,draft,streaming,chatRecovery,interrupt,interruptions,resumeAnswers,approvalChoices,resources,newConversation,resumeChat,authenticate,logout,generate,cancelGeneration,retryGeneration,loadPage,loadBriefings,loadLatestBriefing,loadSchedules,loadBriefing,mailAction,newTask,inspectTask,editTask,saveTask,scheduleAction,saveSettings,searchHistory,createHistoryBriefing,sendChat,recoverChat,formatDate,markdownToHtml,sourceUrl,labels,allowed,showError }
   }, template,
 }
 const router = createRouter({ history:createWebHashHistory(), routes:[...navigation.map(item => ({ path:item.path,name:item.name,component:Workbench })),{ path:'/briefings/:id',name:'briefing',component:Workbench },{ path:'/login',name:'login',component:Workbench },{ path:'/:pathMatch(.*)*',redirect:'/' }] })

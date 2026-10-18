@@ -71,3 +71,17 @@ describe('首页最新简报', () => {
     captured.route.name = 'history'
   })
 })
+
+describe('助手 Markdown 展示', () => {
+  /** 验证常用 Markdown 被转为可读标签，同时转义原始 HTML。 */
+  it('渲染标题、列表、强调和安全链接', () => {
+    setActivePinia(createPinia())
+    const page = captured.component.setup()
+    const html = page.markdownToHtml('## 标题\n- **重点**\n- [来源](https://example.com)\n<script>alert(1)</script>')
+    expect(html).toContain('<h2>标题</h2>')
+    expect(html).toContain('<strong>重点</strong>')
+    expect(html).toContain('target="_blank"')
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
+    expect(html).not.toContain('<script>')
+  })
+})
