@@ -17,6 +17,8 @@ app.mount("/assets", StaticFiles(directory=frontend_root / "assets", check_dir=F
 def startup() -> None:
     """准备受控简报目录；数据库结构由 Alembic 管理。"""
     settings.html_root.mkdir(parents=True, exist_ok=True)
+    from app.services.assistant_runtime import setup_persistence
+    setup_persistence()
 @app.get("/healthz")
 def health() -> dict:
     """返回服务状态。"""

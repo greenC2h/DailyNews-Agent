@@ -115,6 +115,21 @@ def _lock_key(value: str) -> int:
     return int.from_bytes(hashlib.blake2b(value.encode(), digest_size=8).digest(), "big", signed=True)
 
 
+def setup_persistence() -> None:
+    """在接收对话请求前初始化 PostgreSQL Checkpointer 和 Store 结构。"""
+    settings = get_settings()
+    if not settings.database_url or make_url(settings.database_url).get_backend_name() != "postgresql":
+        return
+    dsn = make_url(settings.database_url).set(drivername="postgresql").render_as_string(hide_password=False)
+    with connect(dsn, autocommit=True) as lock_connection, PostgresSaver.from_conn_string(dsn) as checkpointer, PostgresStore.from_conn_string(dsn) as store:
+        lock_connection.execute("SELECT pg_advisory_lock(%s)", (_lock_key("dailynews:assistant:schema"),))
+        try:
+            checkpointer.setup()
+            store.setup()
+        finally:
+            lock_connection.execute("SELECT pg_advisory_unlock(%s)", (_lock_key("dailynews:assistant:schema"),))
+
+
 @contextmanager
 def _persistence(thread_key: str):
     """持有独立线程锁并提供 Checkpointer/Store，避免锁住其写入连接。"""
@@ -127,13 +142,6 @@ def _persistence(thread_key: str):
         if not acquired:
             raise HTTPException(409, detail={"code": "THREAD_BUSY", "message": "该对话正在处理，请稍后重试"})
         try:
-            # 两种持久化组件共享数据库 schema，避免并发首启迁移相互竞争。
-            lock_connection.execute("SELECT pg_advisory_lock(%s)", (_lock_key("dailynews:assistant:schema"),))
-            try:
-                checkpointer.setup()
-                store.setup()
-            finally:
-                lock_connection.execute("SELECT pg_advisory_unlock(%s)", (_lock_key("dailynews:assistant:schema"),))
             yield checkpointer, store
         finally:
             lock_connection.execute("SELECT pg_advisory_unlock(%s)", (_lock_key(thread_key),))
