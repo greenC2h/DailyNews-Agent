@@ -21,14 +21,15 @@ class TaskRequest(BaseModel):
     run_at: datetime
     timezone: str
     query: str = Field(min_length=2, max_length=500)
-    limit: int = Field(default=5, ge=1, le=100)
+    limit: int = Field(default=5, ge=1, le=100, description="最多整理出的新闻事件数")
+    article_limit: int | None = Field(default=None, ge=1, le=200, description="原始文章采集篇数；省略或设为 null 时跟随事件数的两倍")
     window_start: datetime | None = None
     window_end: datetime | None = None
     overrides: dict = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_times(self):
-        """拒绝无时区时间及缺失或倒置的窗口。"""
+        """拒绝无效时区、时间窗口及低于事件数的文章采集上限。"""
         try:
             ZoneInfo(self.timezone)
         except Exception as exc:
@@ -41,7 +42,14 @@ class TaskRequest(BaseModel):
             raise ValueError("新闻窗口必须同时提供开始和结束")
         if self.window_start and (not self.window_start.tzinfo or not self.window_end.tzinfo or self.window_start >= self.window_end):
             raise ValueError("新闻窗口必须带时区且开始早于结束")
+        if self.article_limit is not None and self.article_limit < self.limit:
+            raise ValueError("原始文章采集上限不能低于事件数")
         return self
+
+
+class ArticleLimitRequest(BaseModel):
+    """更新定时任务的原文采集上限，null 表示跟随事件数两倍。"""
+    article_limit: int | None = Field(ge=1, le=200)
 
 def task_payload(task: ScheduledTask) -> dict:
     """转换配置并提供服务端允许操作。"""
@@ -50,7 +58,7 @@ def task_payload(task: ScheduledTask) -> dict:
         actions = ["edit", "pause" if task.status == "active" else "resume"]
         if not task.is_default:
             actions.append("cancel")
-    return {key: getattr(task, key) for key in ("id", "name", "frequency", "status", "timezone", "run_at", "next_run_at", "last_run_at", "query", "limit", "window_start", "window_end", "is_default", "overrides")} | {"allowed_actions": actions}
+    return {key: getattr(task, key) for key in ("id", "name", "frequency", "status", "timezone", "run_at", "next_run_at", "last_run_at", "query", "limit", "article_limit", "window_start", "window_end", "is_default", "overrides")} | {"allowed_actions": actions}
 
 def owned_task(db: Session, user: User, task_id: str) -> ScheduledTask:
     """锁定所属任务，与领取事务使用相同锁边界。"""
@@ -83,6 +91,19 @@ def list_tasks(db: Session = Depends(get_db), user: User = Depends(current_user)
 def get_task(task_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
     """查看所属任务完整配置。"""
     return task_payload(owned_task(db, user, task_id))
+
+@router.patch("/{task_id}/article-limit")
+def update_article_limit(task_id: str, payload: ArticleLimitRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """仅更新所属任务的文章采集上限，默认每日任务按当前偏好事件数校验。"""
+    task = owned_task(db, user, task_id)
+    if task.status not in {"active", "paused"}:
+        raise HTTPException(409, detail={"code": "EDIT_NOT_ALLOWED", "message": "终结任务不可编辑"})
+    event_limit = user.style.get("max_events", 5) if task.is_default else task.limit
+    if payload.article_limit is not None and payload.article_limit < event_limit:
+        raise HTTPException(422, detail={"code": "ARTICLE_LIMIT_TOO_LOW", "message": "原始文章采集上限不能低于事件数"})
+    task.article_limit = payload.article_limit
+    db.commit()
+    return task_payload(task)
 
 @router.patch("/{task_id}")
 def edit_task(task_id: str, payload: TaskRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):

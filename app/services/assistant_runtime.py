@@ -54,14 +54,14 @@ def business_tools(user_id: str, thread_key: str) -> list:
 
     @tool(response_format="content_and_artifact")
     def publish_briefing(request: BriefingRequest, runtime: ToolRuntime) -> tuple[str, dict]:
-        """发布即时简报任务；必须明确主题、条数、带时区的新闻起止时间，邮件仅发给当前账号。"""
+        """发布即时简报任务；必须明确主题、最多整理出的事件数和带时区的新闻起止时间，原文采集上限由服务端按事件数两倍设置；邮件仅发给当前账号。"""
         with SessionLocal() as db:
             result = create_briefing(request, db, _owned_user(db, user_id), idempotency_key=_operation_key(thread_key, runtime.tool_call_id))
             return _tool_result("generation_task", result)
 
     @tool(response_format="content_and_artifact")
     def schedule_briefing(request: TaskRequest, runtime: ToolRuntime) -> tuple[str, dict]:
-        """创建 daily/once 定时任务；缺少执行时间、IANA 时区或一次性新闻范围时先补问。"""
+        """创建 daily/once 定时任务；limit 是整理出的事件上限，article_limit 仅在用户明确要求采集篇数时设置，否则跟随事件数两倍；缺少执行时间、IANA 时区或一次性新闻范围时先补问。"""
         with SessionLocal() as db:
             result = create_task(request, db, _owned_user(db, user_id), idempotency_key=_operation_key(thread_key, runtime.tool_call_id))
             return _tool_result("scheduled_task", result)
@@ -179,7 +179,7 @@ def _build_agent(user: User, thread_key: str, checkpointer, store):
     )
     prompt = (
         "你是 DailyNews 新闻助手，使用中文沟通。仅处理当前账号的数据，收件人固定为注册邮箱。"
-        "立即生成需要明确主题、事件条数、新闻开始和结束时间；缺项先用 ask_user 补问。"
+        "立即生成需要明确主题、最多整理出的事件数（limit）、新闻开始和结束时间；采集原始文章上限由服务端按事件数两倍设置，不询问或复用事件数作为文章数；缺项先用 ask_user 补问。定时任务的 limit 同样表示事件数，article_limit 默认留空以跟随两倍规则，只有用户明确指定采集篇数时才填手动值。"
         "定时任务仅支持 daily/once，必须明确执行时间和 IANA 时区，一次性还需明确新闻范围。"
         "持久偏好只在用户明确要求保存时修改，否则放在本次 request.overrides。修改偏好前读取版本。"
         "业务工具已发布异步任务不代表生成或发信成功，应返回任务标识与真实状态。"

@@ -69,8 +69,10 @@ const Workbench = {
     const schedules = ref({ items:[], page:1, total:0, total_pages:0 })
     const selectedTask = ref(null); const executions = ref([]); const briefing = ref(null); const deliveries = ref([])
     const instant = reactive({ query:'', start:'', end:'', limit:5 })
-    const taskForm = reactive({ id:'', name:'', frequency:'daily', date:'', time:'08:00', timezone:'Asia/Shanghai', query:'', limit:5, start:'', end:'', overrides:{} })
+    const taskForm = reactive({ id:'', name:'', frequency:'daily', date:'', time:'08:00', timezone:'Asia/Shanghai', query:'', limit:5, articleLimitMode:'default', articleLimit:10, start:'', end:'', overrides:{} })
     const editing = ref(false)
+    const articleLimitMode = ref('default'); const articleLimitValue = ref(10)
+    const selectedEventLimit = computed(() => selectedTask.value?.is_default ? (store.user?.style?.max_events ?? 5) : (selectedTask.value?.limit ?? 5))
     const settings = reactive({ nickname:'', timezone:'Asia/Shanghai', topics:'', keywords:'', language:'zh-CN', daily_push_time:'', max_events:5, summary_max_chars:400, layout:'list', sort:'latest', detail:'' })
     const settingsBaseline = ref({}); const settingsVersion = ref(null)
     const historyForm = reactive({ query:'', start:'', end:'', limit:20 }); const history = ref(null); const historyBriefing = ref(null)
@@ -216,25 +218,38 @@ const Workbench = {
       })
     }
     /** 初始化新任务表单。 */
-    function newTask() { Object.assign(taskForm, { id:'', name:'', frequency:'daily', date:'', time:'08:00', timezone:store.user.timezone, query:'', limit:5, start:'', end:'', overrides:{} }); editing.value = true }
+    function newTask() { Object.assign(taskForm, { id:'', name:'', frequency:'daily', date:'', time:'08:00', timezone:store.user.timezone, query:'', limit:5, articleLimitMode:'default', articleLimit:10, start:'', end:'', overrides:{} }); editing.value = true }
     /** 读取任务详情和最近执行，不从列表推测操作。 */
-    async function inspectTask(task) { await perform('inspect', async () => { selectedTask.value = await api(`/tasks/${task.id}`); const result = await api(`/tasks/${task.id}/executions`); executions.value = result.items || result }) }
+    async function inspectTask(task) { await perform('inspect', async () => { selectedTask.value = await api(`/tasks/${task.id}`); articleLimitMode.value = selectedTask.value.article_limit == null ? 'default' : 'custom'; articleLimitValue.value = selectedTask.value.article_limit ?? selectedEventLimit.value * 2; const result = await api(`/tasks/${task.id}/executions`); executions.value = result.items || result }) }
     /** 将任务原始时区和配置载入编辑表单。 */
     function editTask() {
       const task = selectedTask.value; const local = formDate(task.run_at, task.timezone)
-      Object.assign(taskForm, { id:task.id, name:task.name, frequency:task.frequency, timezone:task.timezone, date:local.slice(0,10), time:local.slice(11), query:task.query, limit:task.limit, start:formDate(task.window_start,task.timezone), end:formDate(task.window_end,task.timezone), overrides:task.overrides || {} }); editing.value = true
+      Object.assign(taskForm, { id:task.id, name:task.name, frequency:task.frequency, timezone:task.timezone, date:local.slice(0,10), time:local.slice(11), query:task.query, limit:task.limit, articleLimitMode:task.article_limit == null ? 'default' : 'custom', articleLimit:task.article_limit ?? task.limit * 2, start:formDate(task.window_start,task.timezone), end:formDate(task.window_end,task.timezone), overrides:task.overrides || {} }); editing.value = true
     }
     /** 保存每日或一次性任务，一次性任务必须指定新闻窗口。 */
     async function saveTask() {
       await perform('task', async () => {
         const today = formDate(new Date().toISOString(),taskForm.timezone).slice(0,10)
-        const payload = { name:taskForm.name || null, frequency:taskForm.frequency, timezone:taskForm.timezone, query:taskForm.query, limit:taskForm.limit, overrides:taskForm.overrides, run_at:zonedDateTime(`${taskForm.frequency === 'daily' ? today : taskForm.date}T${taskForm.time}`,taskForm.timezone) }
+        const articleLimit = taskForm.articleLimitMode === 'custom' ? Number(taskForm.articleLimit) : null
+        if (articleLimit !== null && articleLimit < Number(taskForm.limit)) throw new Error('原始文章采集上限不能低于事件数。')
+        const payload = { name:taskForm.name || null, frequency:taskForm.frequency, timezone:taskForm.timezone, query:taskForm.query, limit:taskForm.limit, article_limit:articleLimit, overrides:taskForm.overrides, run_at:zonedDateTime(`${taskForm.frequency === 'daily' ? today : taskForm.date}T${taskForm.time}`,taskForm.timezone) }
         if (taskForm.frequency === 'once') {
           payload.window_start = zonedDateTime(taskForm.start,taskForm.timezone); payload.window_end = zonedDateTime(taskForm.end,taskForm.timezone)
           if (payload.window_start >= payload.window_end) throw new Error('新闻开始时间必须早于结束时间。')
         }
         await api(`/tasks${taskForm.id ? `/${taskForm.id}` : ''}`, { method:taskForm.id ? 'PATCH' : 'POST', key:crypto.randomUUID(), body:payload })
         editing.value = false; selectedTask.value = null; await loadSchedules(); notice.value = '定时任务已保存。'
+      })
+    }
+    /** 保存当前定时任务的文章采集上限，默认每日任务也可独立配置。 */
+    async function saveArticleLimit() {
+      await perform('article-limit', async () => {
+        const value = articleLimitMode.value === 'custom' ? Number(articleLimitValue.value) : null
+        if (value !== null && value < selectedEventLimit.value) throw new Error('原始文章采集上限不能低于事件数。')
+        selectedTask.value = await api(`/tasks/${selectedTask.value.id}/article-limit`, { method:'PATCH', body:{ article_limit:value } })
+        articleLimitValue.value = selectedTask.value.article_limit ?? selectedEventLimit.value * 2
+        notice.value = '原始文章采集上限已保存。'
+        await loadSchedules()
       })
     }
     /** 执行后端允许的暂停、恢复或取消，刷新任务状态。 */
@@ -343,7 +358,7 @@ const Workbench = {
     watch(() => route.fullPath,loadPage)
     onMounted(async () => { await restoreSession(); pollTimer = setInterval(tick,4000) })
     onUnmounted(() => { disposed = true; clearInterval(pollTimer); chatController?.abort() })
-    return { navigation,store,initialized,busy,error,notice,authMode,auth,page,title,briefings,latestLoading,schedules,selectedTask,executions,briefing,deliveries,instant,taskForm,editing,settings,historyForm,history,historyBriefing,threadId,messages,draft,streaming,chatRecovery,interrupt,interruptions,resumeAnswers,approvalChoices,resources,newConversation,resumeChat,authenticate,logout,generate,cancelGeneration,retryGeneration,loadPage,loadBriefings,loadLatestBriefing,loadSchedules,loadBriefing,mailAction,newTask,inspectTask,editTask,saveTask,scheduleAction,saveSettings,searchHistory,createHistoryBriefing,sendChat,recoverChat,formatDate,markdownToHtml,sourceUrl,labels,allowed,showError }
+    return { navigation,store,initialized,busy,error,notice,authMode,auth,page,title,briefings,latestLoading,schedules,selectedTask,selectedEventLimit,articleLimitMode,articleLimitValue,executions,briefing,deliveries,instant,taskForm,editing,settings,historyForm,history,historyBriefing,threadId,messages,draft,streaming,chatRecovery,interrupt,interruptions,resumeAnswers,approvalChoices,resources,newConversation,resumeChat,authenticate,logout,generate,cancelGeneration,retryGeneration,loadPage,loadBriefings,loadLatestBriefing,loadSchedules,loadBriefing,mailAction,newTask,inspectTask,editTask,saveTask,saveArticleLimit,scheduleAction,saveSettings,searchHistory,createHistoryBriefing,sendChat,recoverChat,formatDate,markdownToHtml,sourceUrl,labels,allowed,showError }
   }, template,
 }
 const router = createRouter({ history:createWebHashHistory(), routes:[...navigation.map(item => ({ path:item.path,name:item.name,component:Workbench })),{ path:'/briefings/:id',name:'briefing',component:Workbench },{ path:'/login',name:'login',component:Workbench },{ path:'/:pathMatch(.*)*',redirect:'/' }] })

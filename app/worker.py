@@ -77,7 +77,7 @@ def process_task(task_id: str) -> None:
                     articles = []
                 else:
                     events = None
-                    articles = fetch_articles(task.query, start=utc(task.window_start), end=utc(task.window_end), limit=task.limit, language=snapshot.get("language", "zh-CN"), timezone_name=snapshot.get("timezone", "Asia/Shanghai"), include_terms=snapshot.get("include_terms", []), exclude_terms=snapshot.get("exclude_terms", []))
+                    articles = fetch_articles(task.query, start=utc(task.window_start), end=utc(task.window_end), limit=task.article_limit, language=snapshot.get("language", "zh-CN"), timezone_name=snapshot.get("timezone", "Asia/Shanghai"), include_terms=snapshot.get("include_terms", []), exclude_terms=snapshot.get("exclude_terms", []))
                     if not articles:
                         task.status = "no_events"; task.error_code = "NO_EVENTS"; db.commit(); return
                 execution.phase = "processing"; db.commit()
@@ -176,7 +176,8 @@ def scan_schedules(recovery_boundary: datetime | None = None) -> int:
             elif db.scalar(select(GenerationTask.id).where(GenerationTask.user_id == user.id, GenerationTask.status.in_(["queued", "running"]))):
                 status = "skipped_busy"; error = "USER_BUSY"
             query = (" ".join(user.topics + user.keywords) or "人工智能") if scheduled.is_default else scheduled.query
-            task = GenerationTask(user_id=user.id, query=query, limit=user.style.get("max_events", 5) if scheduled.is_default else scheduled.limit, window_start=start, window_end=end, status=status, error_code=error, scheduled_task_id=scheduled.id, planned_at=planned, snapshot=user_snapshot(user, scheduled.overrides), send_email=True)
+            event_limit = user.style.get("max_events", 5) if scheduled.is_default else scheduled.limit
+            task = GenerationTask(user_id=user.id, query=query, limit=event_limit, article_limit=scheduled.article_limit if scheduled.article_limit is not None else event_limit * 2, window_start=start, window_end=end, status=status, error_code=error, scheduled_task_id=scheduled.id, planned_at=planned, snapshot=user_snapshot(user, scheduled.overrides), send_email=True)
             db.add(task); db.flush()
             if status != "queued":
                 db.add(TaskExecution(user_id=user.id, generation_task_id=task.id, status=status, phase=status, error_code=error, finished_at=now))

@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from app import worker
 from app.db.database import Base
 from app.db.models import User
-from app.db.news_models import Briefing, GenerationTask, TaskExecution
+from app.db.news_models import Briefing, GenerationTask, ScheduledTask, TaskExecution
 
 
 @pytest.mark.parametrize("cancel_during_model", [False, True])
@@ -32,14 +32,49 @@ def test_early_exit_finishes_execution(tmp_path, monkeypatch, cancel_during_mode
             db.commit()
         return [SimpleNamespace()], "<html>迟到结果</html>"
 
-    monkeypatch.setattr(worker, "fetch_articles", lambda *args, **kwargs: [object()] if cancel_during_model else [])
+    fetch_limits = []
+    def fake_fetch(*args, **kwargs):
+        """记录 Worker 实际传给采集器的上限。"""
+        fetch_limits.append(kwargs["limit"])
+        return [object()] if cancel_during_model else []
+    monkeypatch.setattr(worker, "fetch_articles", fake_fetch)
     monkeypatch.setattr(worker, "generate_briefing", fake_generate)
     worker.process_task(identifier)
     with factory() as db:
         task = db.get(GenerationTask, identifier)
         execution = db.scalar(select(TaskExecution).where(TaskExecution.generation_task_id == identifier))
         assert task.status == ("cancelled" if cancel_during_model else "no_events")
+        assert task.limit == 5 and task.article_limit == 10
+        assert fetch_limits == [10]
         assert execution.status == task.status
         assert execution.finished_at is not None
         assert db.scalar(select(Briefing.id)) is None
+    engine.dispose()
+
+
+def test_schedule_scan_snapshots_following_and_manual_article_limits(tmp_path, monkeypatch):
+    """调度入队时解析两倍默认值并固化手动文章上限。"""
+    engine = create_engine(f"sqlite:///{tmp_path / 'schedule-limits.db'}")
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    Base.metadata.create_all(engine)
+    monkeypatch.setattr(worker, "SessionLocal", factory)
+    now = datetime.now(timezone.utc)
+    with factory() as db:
+        user = User(email="schedule-limits@example.com", password_hash="unused", style={"max_events": 6})
+        db.add(user); db.flush()
+        for name, article_limit in (("following", None), ("manual", 15)):
+            db.add(ScheduledTask(
+                user_id=user.id, name=name, frequency="daily", timezone="Asia/Shanghai",
+                run_at=now, query=name, limit=7, article_limit=article_limit,
+                recipient_email=user.email, status="active", next_run_at=now - timedelta(seconds=1),
+                is_default=(name == "following"),
+            ))
+        db.commit()
+
+    worker.scan_schedules()
+    with factory() as db:
+        tasks = db.query(GenerationTask).order_by(GenerationTask.query).all()
+        assert sorted((task.query, task.limit, task.article_limit) for task in tasks) == [
+            ("manual", 7, 15), ("人工智能", 6, 12),
+        ]
     engine.dispose()

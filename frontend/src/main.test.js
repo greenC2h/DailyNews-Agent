@@ -85,3 +85,29 @@ describe('助手 Markdown 展示', () => {
     expect(html).not.toContain('<script>')
   })
 })
+
+describe('定时任务文章采集上限', () => {
+  /** 验证默认每日任务的手动文章上限通过独立字段保存。 */
+  it('允许在任务详情中提交固定采集篇数', async () => {
+    setActivePinia(createPinia())
+    const page = captured.component.setup()
+    page.store.user = { id:'user-test', timezone:'Asia/Shanghai', style:{ max_events:6 } }
+    const task = { id:'daily-test', name:'默认每日简报', is_default:true, article_limit:null, limit:5 }
+    const updated = { ...task, article_limit:15 }
+    vi.mocked(api)
+      .mockResolvedValueOnce(task)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(updated)
+      .mockResolvedValueOnce({ items:[], page:1, total_pages:1 })
+    await page.inspectTask(task)
+    expect(page.articleLimitMode.value).toBe('default')
+    expect(page.articleLimitValue.value).toBe(12)
+    page.articleLimitMode.value = 'custom'
+    page.articleLimitValue.value = 15
+    await page.saveArticleLimit()
+    expect(api).toHaveBeenCalledWith('/tasks/daily-test/article-limit', {
+      method:'PATCH', body:{ article_limit:15 },
+    })
+    expect(page.selectedTask.value.article_limit).toBe(15)
+  })
+})

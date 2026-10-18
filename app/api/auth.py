@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db.database import get_db
 from app.db.models import SessionToken, User
+from app.db.news_models import ScheduledTask
 from app.services.security import (
     SettingsPatch,
     SettingsVersionConflict,
@@ -179,6 +180,10 @@ def me(user: User = Depends(current_user)):
 @router.patch("/settings")
 def patch_settings(payload: SettingsPatch, db: Session = Depends(get_db), user: User = Depends(current_user)):
     """通过共享设置服务执行字段级更新和原子版本保护。"""
+    next_style = {**user.style, **(payload.style.model_dump(exclude_unset=True) if payload.style else {})}
+    default_task = db.query(ScheduledTask).filter(ScheduledTask.user_id == user.id, ScheduledTask.is_default.is_(True)).first()
+    if default_task and default_task.article_limit is not None and default_task.article_limit < next_style.get("max_events", 5):
+        raise HTTPException(422, detail={"code": "ARTICLE_LIMIT_TOO_LOW", "message": "默认每日任务的原文采集上限低于事件数，请先调整采集上限"})
     try:
         return user_payload(update_user_settings(db, user, payload))
     except SettingsVersionConflict as exc:

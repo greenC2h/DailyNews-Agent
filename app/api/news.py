@@ -20,7 +20,7 @@ settings = get_settings()
 class BriefingRequest(BaseModel):
     """即时简报请求。"""
     query: str = Field(min_length=2, max_length=500)
-    limit: int = Field(default=5, ge=1, le=100)
+    limit: int = Field(default=5, ge=1, le=100, description="最多整理出的新闻事件数；原始文章采集上限固定为此值的两倍")
     send_email: bool = False
     overrides: dict = Field(default_factory=dict)
     start: datetime | None = None
