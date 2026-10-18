@@ -7,7 +7,8 @@ from sqlalchemy.orm import sessionmaker
 from app import worker
 from app.db.database import Base
 from app.db.models import User
-from app.db.news_models import Briefing, GenerationTask, ScheduledTask, TaskExecution
+from app.db.news_models import Briefing, GenerationTask, NewsEvent, ScheduledTask, TaskExecution
+from app.services.generation import EventRecord, EventSource
 
 
 @pytest.mark.parametrize("cancel_during_model", [False, True])
@@ -49,6 +50,45 @@ def test_early_exit_finishes_execution(tmp_path, monkeypatch, cancel_during_mode
         assert execution.status == task.status
         assert execution.finished_at is not None
         assert db.scalar(select(Briefing.id)) is None
+    engine.dispose()
+
+
+def test_generated_briefing_persists_assigned_event_ids(tmp_path, monkeypatch):
+    """Worker 在写入事件关联前先刷新 ORM ID，详情查询可稳定定位事件。"""
+    engine = create_engine(f"sqlite:///{tmp_path / 'worker-event-ids.db'}")
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    Base.metadata.create_all(engine)
+    monkeypatch.setattr(worker, "SessionLocal", factory)
+    monkeypatch.setattr(worker.get_settings(), "html_root", tmp_path / "html")
+    event = EventRecord(
+        title="机器人进入汽车产线", summary="梅卡曼德展示汽车制造应用。",
+        sources=[EventSource(
+            title="原文标题", source="光明网", url="https://example.com/article",
+            published_at="2026-10-18T00:00:00+00:00", excerpt="现场应用情况。",
+        )],
+    )
+    with factory() as db:
+        user = User(email="worker-event-ids@example.com", password_hash="unused")
+        db.add(user); db.flush()
+        end = datetime.now(timezone.utc)
+        task = GenerationTask(
+            user_id=user.id, query="具身智能", limit=1, article_limit=2,
+            window_start=end-timedelta(days=1), window_end=end,
+        )
+        db.add(task); db.commit(); identifier = task.id
+
+    monkeypatch.setattr(worker, "fetch_articles", lambda *args, **kwargs: [object()])
+    monkeypatch.setattr(worker, "generate_briefing", lambda *args, **kwargs: ([event], "<!doctype html><html><body>brief</body></html>"))
+    monkeypatch.setattr(worker, "index_events", lambda events, db=None: len(events))
+
+    worker.process_task(identifier)
+
+    with factory() as db:
+        briefing = db.scalar(select(Briefing).where(Briefing.user_id == task.user_id))
+        saved_events = db.query(NewsEvent).filter_by(briefing_id=briefing.id).all()
+        assert len(saved_events) == 1
+        assert briefing.event_ids == [saved_events[0].id]
+        assert briefing.event_ids[0] is not None
     engine.dispose()
 
 

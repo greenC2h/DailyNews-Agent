@@ -106,6 +106,8 @@ def process_task(task_id: str) -> None:
                     source = event.sources[0]
                     saved = NewsEvent(briefing_id=briefing.id, user_id=user.id, title=event.title, source=source.source, url=source.url, published_at=datetime.fromisoformat(source.published_at), summary=event.summary, facts=event.model_dump())
                     db.add(saved); saved_events.append(saved)
+                # 默认主键在 flush 前尚未分配，先写入事件以确保关联 ID 有效。
+                db.flush()
                 stored_html = store_html(settings.html_root, user.id, briefing.id, html)
                 apply_stored_html(briefing, stored_html); briefing.event_ids = [event.id for event in saved_events]
                 task.briefing_id = briefing.id; task.status = "succeeded"; task.error_code = None

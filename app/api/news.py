@@ -106,8 +106,11 @@ def get_briefing(briefing_id: str, db: Session = Depends(get_db), user: User = D
     title = briefing_display_title(briefing)
     events = db.query(NewsEvent).filter(NewsEvent.briefing_id == briefing.id, NewsEvent.user_id == user.id).all()
     briefing.read_at = datetime.now(timezone.utc); db.commit()
-    if briefing.event_ids:
-        events = db.query(NewsEvent).filter(NewsEvent.id.in_(briefing.event_ids), NewsEvent.user_id == user.id).all()
+    valid_event_ids = [event_id for event_id in (briefing.event_ids or []) if event_id]
+    if valid_event_ids:
+        linked_events = db.query(NewsEvent).filter(NewsEvent.id.in_(valid_event_ids), NewsEvent.user_id == user.id).all()
+        if linked_events:
+            events = linked_events
     deliveries = db.query(MailDelivery).filter(MailDelivery.briefing_id == briefing.id, MailDelivery.user_id == user.id).all()
     actions = ["send"] if not any(item.status in {"sending", "success", "pending_confirmation"} for item in deliveries) else []
     return {"id":briefing.id,"title":title,"query":briefing.query,"event_count":briefing.event_count,"created_at":briefing.created_at,"allowed_actions":actions,"events":[{"id":event.id,"title":event.title,"source":event.source,"url":event.url,"published_at":event.published_at,"summary":event.summary,"facts":event.facts} for event in events]}

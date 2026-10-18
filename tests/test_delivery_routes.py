@@ -82,3 +82,29 @@ def test_briefing_list_uses_generated_title(client, tmp_path):
     item = response.json()["items"][0]
     assert item["title"] == "端侧 AI 的新一轮协同"
     assert "preview" not in item
+
+
+def test_briefing_detail_falls_back_when_event_ids_are_invalid(client):
+    """旧简报的关联 ID 无效时仍按 briefing_id 返回事件来源。"""
+    user = client.post("/api/v1/auth/register", json={"email":"detail-sources@example.com","password":"secure-pass-123"}).json()
+    dependency = app.dependency_overrides[get_db]()
+    db = next(dependency)
+    try:
+        brief = Briefing(user_id=user["id"], title="具身智能", query="AI", html_path="unused", event_count=1, event_ids=[None])
+        db.add(brief); db.flush()
+        db.add(NewsEvent(
+            user_id=user["id"], briefing_id=brief.id, title="机器人进入汽车产线",
+            summary="梅卡曼德展示汽车制造应用。", source="光明网",
+            url="https://example.com/article", published_at=datetime.now(timezone.utc),
+            facts={"sources":[{"title":"原文标题","source":"光明网","url":"https://example.com/article","published_at":"2026-10-18T00:00:00+00:00"}]},
+        ))
+        db.commit(); identifier = brief.id
+    finally:
+        dependency.close()
+
+    response = client.get(f"/api/v1/news/briefings/{identifier}")
+
+    assert response.status_code == 200
+    events = response.json()["events"]
+    assert len(events) == 1
+    assert events[0]["facts"]["sources"][0]["title"] == "原文标题"
