@@ -1,19 +1,42 @@
-# DailyNews
+<p align="center">
+  <img src="assets/logo.svg" width="112" height="112" alt="DailyNews logo">
+</p>
 
-**可自行部署的定时新闻简报服务。** DailyNews 从新闻源采集文章，整理生成精简的 HTML 简报，并可通过邮件发送。它还支持立即生成、每日定时任务、简报历史、语义检索和持久化助手对话。
+<h1 align="center">DailyNews</h1>
 
-简体中文 | [English](README.en.md)
+<p align="center"><strong>让关心的新闻，每天如约而至。</strong></p>
+<p align="center">从新闻采集、事件整理到邮件推送，一个可以自行部署的 AI 新闻助手。</p>
 
-## 功能
+<p align="center">
+  简体中文 · <a href="README.en.md">English</a>
+</p>
 
-- 按需生成或按每日规则生成简报；定时规则使用自身时区和自然日时间窗口。
-- 采集并提取文章，调用已配置的大语言模型整理事件并生成 HTML 简报。
-- 预览和下载已保存的简报，浏览历史并检索已采集事件。
-- 通过 SMTP 发送简报，跟踪投递状态，并对发送结果不确定的情况进行保护性恢复。
-- 使用 PostgreSQL 持久化用户偏好、定时任务、任务执行记录、简报和助手对话。
-- 可选使用 Milvus 建立事件索引以支持混合语义检索，也可启用基于 OpenSandbox 的助手工具。
+<p align="center">
+  <img alt="Python 3.12+" src="https://img.shields.io/badge/Python-3.12%2B-3776AB?style=flat-square">
+  <img alt="FastAPI" src="https://img.shields.io/badge/API-FastAPI-009688?style=flat-square">
+  <img alt="Vue 3" src="https://img.shields.io/badge/Web-Vue_3-42B883?style=flat-square">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/Storage-PostgreSQL-4169E1?style=flat-square">
+</p>
 
-## 项目架构
+## ✨ 少一些信息追赶，多一些有效阅读
+
+把关注的话题和关键词交给 DailyNews。它会采集新闻、整理同一事件的报道，生成带来源链接的 HTML 简报，让日常阅读有一个固定入口。你可以立即生成，也可以设定每天的阅读时间，通过邮箱接收。
+
+| | 你可以做什么 |
+| :--- | :--- |
+| 🎯 **围绕兴趣订阅** | 设置话题、关键词、语言和简报风格，让阅读围绕你的关注点展开。 |
+| 📰 **按事件理解新闻** | 将文章整理为事件资料和摘要，保留来源链接、差异与不确定性。 |
+| ⏰ **每天如约整理** | 支持每日和一次性任务；每日规则按任务时区整理昨天自然日的新闻。 |
+| 💬 **用对话安排工作** | 通过助手创建简报、管理任务、调整偏好和查询历史；需要补充信息或执行审批时继续对话。 |
+| 🔎 **让历史成为资料库** | 检索已保存事件，利用历史内容生成专题简报；可接入 Milvus 混合检索。 |
+| 📬 **阅读与分发自由选择** | 在网页预览、下载独立 HTML，或通过 SMTP 发送到账号邮箱。 |
+
+### 为持续运行而设计
+
+任务、偏好、简报和对话保存在 PostgreSQL 中。独立 Worker 执行采集、生成和定时扫描，支持租约恢复与任务幂等；邮件结果不确定时进入待确认状态，由用户核实后再决定是否重试。模型和外部服务由你配置，HTML 文件保存在本地受控目录。
+
+
+## 🧭 从新闻源到你的收件箱
 
 ```text
 浏览器（Vue 3 / Vite）
@@ -31,7 +54,7 @@ FastAPI 服务 ----------------------- PostgreSQL
 
 Web 服务和 Worker 是两个独立进程；要执行定时简报，二者都必须持续运行。PostgreSQL 为必需依赖。Milvus、SMTP、模型凭据和 OpenSandbox 按需配置。
 
-## 启动指南
+## 🚀 启动指南
 
 ### 环境要求
 
@@ -98,7 +121,7 @@ uv run python -m app.worker
 
 开发前端时可改用 Vite：执行 `npm --prefix frontend run dev` 并访问 [http://localhost:5173](http://localhost:5173)。开发服务器会将 `/api` 请求代理到 8000 端口；API 进程仍需保持运行。
 
-## 可选集成
+## 🔌 按需连接你的服务
 
 - **邮件投递：** 设置 `SMTP_HOST`、`SMTP_PORT`、`SMTP_USERNAME`、`SMTP_PASSWORD` 和 `SMTP_FROM`。SMTP 成功仅代表中继接受邮件，不代表邮件最终进入收件箱。
 - **语义事件检索：** 设置 `EMBEDDING_API_KEY`、`EMBEDDING_BASE_URL`、`EMBEDDING_MODEL`、`EMBEDDING_DIMENSION`，并配置 `MILVUS_URI` 及所需的 `MILVUS_TOKEN`。使用 `uv run python -m app.cli init-milvus` 显式初始化 collection。更换 Embedding 维度时使用新的 collection 名称，不要删除或覆盖现有 collection。
@@ -106,18 +129,37 @@ uv run python -m app.worker
 
 全部支持的配置项及默认值见 `.env.example`。简报 HTML 默认保存在 `./data/html`，可通过 `HTML_ROOT` 修改。
 
-## 业务数据库结构
+## 🗄️ 业务数据库结构
 
-项目根目录的 [schema.sql](schema.sql) 包含 Alembic 版本 `c3e8f1a4b209` 对应的 9 张 PostgreSQL 业务表、外键和索引，不包含 LangGraph 自行维护的表或业务数据。常规部署优先使用前述 Alembic 迁移；如需手动初始化空数据库：
+[database/schema.sql](database/schema.sql) 包含 Alembic 版本 `c3e8f1a4b209` 对应的 9 张 PostgreSQL 业务表、外键和索引，不包含 LangGraph 自行维护的表或业务数据。常规部署优先使用前述 Alembic 迁移；如需手动初始化空数据库：
 
 ```powershell
-psql -h localhost -U postgres -d dailynews -v ON_ERROR_STOP=1 -f schema.sql
+psql -h localhost -U postgres -d dailynews -v ON_ERROR_STOP=1 -f database/schema.sql
 uv run alembic stamp c3e8f1a4b209
 ```
 
 登记版本前请确保 `.env` 指向同一个数据库。不要对已有业务表的数据库执行此快照，也不要导入后再次执行从零建表迁移。后续升级仍使用 `uv run alembic upgrade head`；框架表由应用启动时初始化。
 
-## 开发与测试
+## 📁 目录导览
+
+```text
+DailyNews-Agent/
+├── app/             # 后端 API、业务服务、数据库模型与 Worker
+├── frontend/        # Vue 工作台
+├── alembic/         # 数据库版本迁移（结构变更入口）
+├── database/        # 业务建表 SQL 快照
+├── assets/          # README Logo 等项目展示资源
+├── scripts/         # 隔离环境验收和运行辅助脚本
+├── skills/          # 新闻简报技能说明
+├── tests/           # 后端自动化测试
+├── main.py          # Web 服务入口
+├── .env.example     # 配置模板
+└── README*.md       # 中英文项目介绍
+```
+
+本地生成的简报和验收产物位于 `data/`；本地项目文档位于 `doc/`。这些目录、`.env` 和 `AGENTS.md` 均不纳入版本管理。前端测试与组件放在 `frontend/src/`，数据库迁移与 SQL 快照分别维护。
+
+## 🛠️ 开发与测试
 
 ```powershell
 uv run python -m pytest -q
@@ -127,7 +169,7 @@ npm --prefix frontend run build
 
 自动化测试覆盖应用行为。模型生成、SMTP 提交和 Milvus 索引需使用实际配置的服务单独验证。
 
-## 安全说明
+## 🔐 部署说明
 
 - 本地开发之外请使用独立且足够长的 `SESSION_SECRET`；通过 HTTPS 提供服务时设置 `COOKIE_SECURE=true`。
 - 不要提交 `.env`、模型凭据、SMTP 密码或本地验收数据。

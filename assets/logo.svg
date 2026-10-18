@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160" fill="none">
+  <title>DailyNews — a new day, a clear briefing</title>
+  <rect width="160" height="160" rx="40" fill="#102D3B"/>
+  <circle cx="108" cy="46" r="22" fill="#F5BC66"/>
+  <path d="M108 14V8M134 24l5-5M140 46h7M82 24l-5-5" stroke="#F5BC66" stroke-width="4" stroke-linecap="round"/>
+  <rect x="31" y="45" width="84" height="90" rx="12" fill="#E9F4EF"/>
+  <path d="M115 66h14v55a14 14 0 0 1-14 14h-7" stroke="#E9F4EF" stroke-width="6" stroke-linejoin="round"/>
+  <rect x="45" y="61" width="25" height="29" rx="4" fill="#2B8B82"/>
+  <path d="M81 65h19M81 77h19M45 103h55M45 115h38" stroke="#102D3B" stroke-width="5" stroke-linecap="round"/>
+</svg>

@@ -1,19 +1,42 @@
-# DailyNews
+<p align="center">
+  <img src="assets/logo.svg" width="112" height="112" alt="DailyNews logo">
+</p>
 
-**A self-hosted, scheduled news briefing service.** DailyNews collects articles from news feeds, turns them into concise HTML briefings, and can deliver them by email. It also supports on-demand briefings, recurring schedules, briefing history, semantic search, and persistent assistant conversations.
+<h1 align="center">DailyNews</h1>
 
-English | [简体中文](README.md)
+<p align="center"><strong>Your interests. Your daily briefing.</strong></p>
+<p align="center">A self-hosted AI news assistant, from article collection to a briefing in your inbox.</p>
 
-## Features
+<p align="center">
+  <a href="README.md">简体中文</a> · English
+</p>
 
-- Generate a briefing on demand or on a daily schedule, using each schedule's timezone and calendar-day window.
-- Collect and extract articles, then use a configured language model to organize events and produce an HTML briefing.
-- Preview and download saved briefings; browse history and search previously collected events.
-- Send briefings through SMTP, with tracked delivery states and guarded recovery for uncertain send outcomes.
-- Persist user preferences, scheduled tasks, task executions, briefings, and assistant conversations in PostgreSQL.
-- Optionally index events in Milvus for hybrid semantic search and enable sandbox-backed assistant tools.
+<p align="center">
+  <img alt="Python 3.12+" src="https://img.shields.io/badge/Python-3.12%2B-3776AB?style=flat-square">
+  <img alt="FastAPI" src="https://img.shields.io/badge/API-FastAPI-009688?style=flat-square">
+  <img alt="Vue 3" src="https://img.shields.io/badge/Web-Vue_3-42B883?style=flat-square">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/Storage-PostgreSQL-4169E1?style=flat-square">
+</p>
 
-## Architecture
+## ✨ Less catching up. More understanding.
+
+Tell DailyNews which topics and keywords matter to you. It collects articles, organizes coverage into events, and produces an HTML briefing with source links. Generate one when you need it, or set a daily reading time and receive it by email.
+
+| | What you can do |
+| :--- | :--- |
+| 🎯 **Follow your interests** | Choose topics, keywords, language, and briefing style around what matters to you. |
+| 📰 **Read by event** | Turn articles into structured events and summaries, preserving sources, differences, and uncertainty. |
+| ⏰ **Build a daily habit** | Run daily or one-time tasks. Daily schedules cover the previous calendar day in the task's timezone. |
+| 💬 **Work through conversation** | Ask the assistant to create briefings, manage schedules, update preferences, and query history, with clarification and execution approval flows. |
+| 🔎 **Build a useful archive** | Search saved events and create topic briefings from your history, with optional Milvus hybrid search. |
+| 📬 **Read and share your way** | Preview in the browser, download a standalone HTML file, or send it to your account email through SMTP. |
+
+### Built for ongoing operation
+
+PostgreSQL persists tasks, preferences, briefings, and conversations. A dedicated Worker handles collection, generation, and scheduling with task leases, recovery, and idempotency. Uncertain mail outcomes require user confirmation before a retry is allowed. You configure the model and external services; HTML files remain in a controlled local directory.
+
+
+## 🧭 From news feeds to your inbox
 
 ```text
 Browser (Vue 3 / Vite)
@@ -33,7 +56,7 @@ Persistent Worker --> schedule scan, task execution, indexing,
 
 The web service and Worker are separate processes and must both remain running for scheduled briefings. PostgreSQL is required. Milvus, SMTP, model credentials, and OpenSandbox are configured for the features that use them.
 
-## Getting Started
+## 🚀 Getting Started
 
 ### Requirements
 
@@ -100,7 +123,7 @@ For your first briefing, choose a topic and an explicit news time range, then su
 
 To use the Vite development server instead of the built frontend, run `npm --prefix frontend run dev` and open [http://localhost:5173](http://localhost:5173). The development server proxies `/api` to port 8000; keep the API process running as well.
 
-## Optional Integrations
+## 🔌 Connect your services
 
 - **Email delivery:** set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `SMTP_FROM`. Successful SMTP submission means the relay accepted the message; it does not prove final inbox delivery.
 - **Semantic event search:** set `EMBEDDING_API_KEY`, `EMBEDDING_BASE_URL`, `EMBEDDING_MODEL`, and `EMBEDDING_DIMENSION`, then set `MILVUS_URI` and any required `MILVUS_TOKEN`. Initialize a collection explicitly with `uv run python -m app.cli init-milvus`. Do not delete or overwrite an existing collection when changing embedding dimensions; use a new collection name.
@@ -108,18 +131,37 @@ To use the Vite development server instead of the built frontend, run `npm --pre
 
 All supported settings and defaults are listed in `.env.example`. Store briefing HTML under `HTML_ROOT` (default: `./data/html`).
 
-## Database Schema
+## 🗄️ Database Schema
 
-The root [schema.sql](schema.sql) contains the nine PostgreSQL business tables, foreign keys, and indexes at Alembic revision `c3e8f1a4b209`. It excludes LangGraph-managed tables and business data. Normal deployments should use Alembic as described above. For manual initialization of an empty database:
+[database/schema.sql](database/schema.sql) contains the nine PostgreSQL business tables, foreign keys, and indexes at Alembic revision `c3e8f1a4b209`. It excludes LangGraph-managed tables and business data. Normal deployments should use Alembic as described above. For manual initialization of an empty database:
 
 ```powershell
-psql -h localhost -U postgres -d dailynews -v ON_ERROR_STOP=1 -f schema.sql
+psql -h localhost -U postgres -d dailynews -v ON_ERROR_STOP=1 -f database/schema.sql
 uv run alembic stamp c3e8f1a4b209
 ```
 
 Configure `.env` for that same database before stamping. Do not run this snapshot against an existing database or run the initial migrations again after importing it. Future schema upgrades still use `uv run alembic upgrade head`; framework tables are initialized by the application.
 
-## Development and Tests
+## 📁 Repository Guide
+
+```text
+DailyNews-Agent/
+├── app/             # API, business services, database models, and Worker
+├── frontend/        # Vue workspace
+├── alembic/         # Versioned database migrations
+├── database/        # Business schema SQL snapshot
+├── assets/          # Project branding and README assets
+├── scripts/         # Isolated acceptance and operational helpers
+├── skills/          # News briefing skill instructions
+├── tests/           # Backend automated tests
+├── main.py          # Web service entry point
+├── .env.example     # Configuration template
+└── README*.md       # Chinese and English project guides
+```
+
+Generated briefings and acceptance artifacts live in `data/`; local project documents live in `doc/`. These directories, `.env`, and `AGENTS.md` are excluded from version control. Frontend tests live alongside modules in `frontend/src/`. Migrations and the SQL snapshot have separate responsibilities.
+
+## 🛠️ Development and Tests
 
 ```powershell
 uv run python -m pytest -q
@@ -129,7 +171,7 @@ npm --prefix frontend run build
 
 Automated tests cover application behavior. Verify model generation, SMTP submission, and Milvus indexing separately against your configured services.
 
-## Security Notes
+## 🔐 Deployment Notes
 
 - Use a unique, long `SESSION_SECRET` outside local development and set `COOKIE_SECURE=true` when serving over HTTPS.
 - Do not commit `.env`, provider credentials, SMTP passwords, or local acceptance data.

@@ -3,7 +3,7 @@
 -- 仅用于全新空数据库；已有数据库必须使用 uv run alembic upgrade head。
 -- 不包含 LangGraph Checkpointer / Store、Milvus 或 alembic_version。
 -- 不包含业务数据；UUID、时间和部分默认值由应用生成，非数据库默认值。
--- 使用：psql -h localhost -U postgres -d dailynews -v ON_ERROR_STOP=1 -f schema.sql
+-- 在仓库根目录执行：psql -h localhost -U postgres -d dailynews -v ON_ERROR_STOP=1 -f database/schema.sql
 -- 执行成功后，在同一数据库配置下运行：
 --   uv run alembic stamp c3e8f1a4b209
 -- stamp 仅登记已导入的结构版本，不执行建表；禁止对不匹配的已有库盲目 stamp。
