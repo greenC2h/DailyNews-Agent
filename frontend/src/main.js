@@ -7,7 +7,7 @@ import './style.css'
 
 const terminal = new Set(['succeeded', 'no_events', 'generation_failed', 'cancelled', 'system_failed', 'failed'])
 const labels = { queued:'等待执行', running:'执行中', succeeded:'简报已生成', no_events:'没有符合条件的事件', generation_failed:'生成失败', system_failed:'系统失败', cancelled:'已取消', active:'已启用', paused:'已暂停', completed:'已完成', missed:'已错过', pending:'未发送', sending:'发送中', success:'已发送', failed:'失败', pending_confirmation:'发送结果待确认', collecting:'采集新闻', generating:'整理简报', indexing:'保存事件' }
-const navigation = [{ path:'/', name:'home', title:'今日简报' }, { path:'/assistant', name:'assistant', title:'新闻策展' }, { path:'/briefings', name:'briefings', title:'我的简报' }, { path:'/tasks', name:'tasks', title:'定时任务' }, { path:'/history', name:'history', title:'历史检索' }, { path:'/settings', name:'settings', title:'账户与订阅' }]
+const navigation = [{ path:'/', name:'home', title:'今日简报' }, { path:'/assistant', name:'assistant', title:'闻知君' }, { path:'/briefings', name:'briefings', title:'我的简报' }, { path:'/tasks', name:'tasks', title:'定时任务' }, { path:'/history', name:'history', title:'历史检索' }, { path:'/settings', name:'settings', title:'账户与订阅' }]
 
 /** 保存跨页面账号和任务摘要，不在本地保存密码或会话 Cookie。 */
 const useWorkspace = defineStore('workspace', () => {
