@@ -94,7 +94,7 @@ NEWS_MODEL_NAME=your-provider-model-name
 
 ### 方案 A：Windows 一键启动（推荐）
 
-直接双击项目根目录的 `启动DailyNews.bat`。脚本会自动同步依赖、构建前端、执行数据库迁移、启动 Web 服务和 Worker，并在 `http://127.0.0.1:8000/healthz` 就绪后打开浏览器。关闭启动窗口会停止本次启动的两个服务进程。
+直接双击项目根目录的 `start_dailynews.bat`（也可双击中文别名 `启动DailyNews.bat`）。脚本会自动同步依赖、构建前端、执行数据库迁移、启动 Web 服务和 Worker，并在 `http://127.0.0.1:8000/healthz` 就绪后打开浏览器。关闭启动窗口会停止本次启动的两个服务进程。
 
 启动日志位于 `data/logs/`；若启动失败，优先查看 `web-error.log` 和 `worker-error.log`。首次启动可能需要较长时间安装依赖和构建前端。
 

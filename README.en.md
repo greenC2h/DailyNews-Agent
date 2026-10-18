@@ -96,7 +96,7 @@ After the initial configuration, choose one of the two startup paths below. You 
 
 ### Option A: One-click startup on Windows (recommended)
 
-Double-click `启动DailyNews.bat` in the repository root. The launcher synchronizes dependencies, builds the frontend, applies database migrations, starts the Web service and Worker, then opens the browser after `http://127.0.0.1:8000/healthz` is ready. Closing the launcher window stops the two processes started by that run.
+Double-click `start_dailynews.bat` in the repository root (`启动DailyNews.bat` is also available as a Chinese alias). The launcher synchronizes dependencies, builds the frontend, applies database migrations, starts the Web service and Worker, then opens the browser after `http://127.0.0.1:8000/healthz` is ready. Closing the launcher window stops the two processes started by that run.
 
 Startup logs are written to `data/logs/`; check `web-error.log` and `worker-error.log` first when startup fails. The first run may take longer while dependencies are installed and the frontend is built.
 
