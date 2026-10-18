@@ -19,6 +19,7 @@ from app.services.rag import index_events
 from app.services.tasking import user_snapshot
 from app.services.delivery import deliver, recover_mail
 from app.services.html_storage import apply_stored_html, commit_stored_html, store_html
+from app.services.briefing_metadata import extract_briefing_title
 
 logger = logging.getLogger("dailynews.worker")
 
@@ -98,7 +99,7 @@ def process_task(task_id: str) -> None:
                     task.status = "cancelled"; task.intermediate = None; task.intermediate_expires_at = None; db.commit(); return
                 if not events:
                     task.status = "no_events"; task.error_code = "NO_EVENTS"; db.commit(); return
-                briefing = Briefing(user_id=user.id, title=f"{task.query} 新闻简报", query=task.query, event_count=len(events), html_path="")
+                briefing = Briefing(user_id=user.id, title=extract_briefing_title(html, f"{task.query} 新闻简报"), query=task.query, event_count=len(events), html_path="")
                 db.add(briefing); db.flush()
                 saved_events = []
                 for event in events:

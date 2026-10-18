@@ -12,6 +12,7 @@ from app.db.news_models import Briefing
 from app.services.generation import EventRecord, EventSource, generate_html
 from app.services.rag import HistoryMatches, VectorMatches, milvus_status, search_events, vector_event_ids
 from app.services.html_storage import apply_stored_html, commit_stored_html, store_html
+from app.services.briefing_metadata import extract_briefing_title
 
 router = APIRouter(prefix="/api/v1/history", tags=["history"])
 
@@ -152,6 +153,7 @@ def create_history_briefing(payload: HistoryBriefingRequest, db: Session = Depen
         root = get_settings().html_root
         stored_html = store_html(root, user.id, briefing.id, html)
         apply_stored_html(briefing, stored_html)
+        briefing.title = extract_briefing_title(html, briefing.title)
         briefing.status = "succeeded"
         commit_stored_html(db, briefing, stored_html, root)
     except Exception as exc:
