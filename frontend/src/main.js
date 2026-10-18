@@ -7,7 +7,7 @@ import './style.css'
 
 const terminal = new Set(['succeeded', 'no_events', 'generation_failed', 'cancelled', 'system_failed', 'failed'])
 const labels = { queued:'等待执行', running:'执行中', succeeded:'简报已生成', no_events:'没有符合条件的事件', generation_failed:'生成失败', system_failed:'系统失败', cancelled:'已取消', active:'已启用', paused:'已暂停', completed:'已完成', missed:'已错过', pending:'未发送', sending:'发送中', success:'已发送', failed:'失败', pending_confirmation:'发送结果待确认', collecting:'采集新闻', generating:'整理简报', indexing:'保存事件' }
-const navigation = [{ path:'/', name:'home', title:'工作台' }, { path:'/assistant', name:'assistant', title:'问问助手' }, { path:'/briefings', name:'briefings', title:'我的简报' }, { path:'/tasks', name:'tasks', title:'定时任务' }, { path:'/history', name:'history', title:'历史检索' }, { path:'/settings', name:'settings', title:'账户与订阅' }]
+const navigation = [{ path:'/', name:'home', title:'今日简报' }, { path:'/assistant', name:'assistant', title:'问问助手' }, { path:'/briefings', name:'briefings', title:'我的简报' }, { path:'/tasks', name:'tasks', title:'定时任务' }, { path:'/history', name:'history', title:'历史检索' }, { path:'/settings', name:'settings', title:'账户与订阅' }]
 
 /** 保存跨页面账号和任务摘要，不在本地保存密码或会话 Cookie。 */
 const useWorkspace = defineStore('workspace', () => {
@@ -41,6 +41,7 @@ const Workbench = {
     const page = computed(() => route.name)
     const title = computed(() => navigation.find(item => item.name === page.value)?.title || '简报详情')
     const briefings = ref({ items:[], page:1, total:0, total_pages:0 })
+    const latestLoading = ref(false)
     const schedules = ref({ items:[], page:1, total:0, total_pages:0 })
     const selectedTask = ref(null); const executions = ref([]); const briefing = ref(null); const deliveries = ref([])
     const instant = reactive({ query:'', start:'', end:'', limit:5 })
@@ -51,7 +52,7 @@ const Workbench = {
     const historyForm = reactive({ query:'', start:'', end:'', limit:20 }); const history = ref(null); const historyBriefing = ref(null)
     const threadId = ref(''); const messages = ref([]); const draft = ref(''); const streaming = ref(false); const chatRecovery = ref(false); const interrupt = ref(null)
     const interruptions = ref([]); const resumeAnswers = reactive({}); const approvalChoices = reactive({}); const resources = ref([])
-    let chatController; let pollTimer; let polling = false; let disposed = false; let sessionEpoch = 0
+    let chatController; let pollTimer; let polling = false; let disposed = false; let sessionEpoch = 0; let latestRequest = 0
 
     /** 显示安全的请求错误，会话失效时清空用户私有内存。 */
     function showError(value) {
@@ -102,6 +103,26 @@ const Workbench = {
     async function logout() { await perform('logout', async () => { await api('/auth/logout', { method:'POST' }); clearSession(); await router.replace('/login') }) }
     /** 加载指定页简报。 */
     async function loadBriefings(number = 1) { briefings.value = await api(`/news/briefings?page=${number}`) }
+    /** 按创建时间跨页寻找最新成功简报，避免无正文记录挡住阅读；丢弃离页或换账号后的响应。 */
+    async function loadLatestBriefing() {
+      const request = ++latestRequest; const epoch = sessionEpoch
+      latestLoading.value = true; briefing.value = null; deliveries.value = []
+      try {
+        let number = 1
+        while (true) {
+          const result = await api(`/news/briefings?page=${number}`)
+          if (request !== latestRequest || epoch !== sessionEpoch || page.value !== 'home') return
+          const latest = result.items?.find(item => item.status === 'succeeded')
+          if (latest) {
+            const detail = await api(`/news/briefings/${encodeURIComponent(latest.id)}`)
+            if (request === latestRequest && epoch === sessionEpoch && page.value === 'home') briefing.value = detail
+            return
+          }
+          if (number >= (result.total_pages || 1)) return
+          number += 1
+        }
+      } finally { if (request === latestRequest) latestLoading.value = false }
+    }
     /** 加载分页任务，兼容旧版数组响应。 */
     async function loadSchedules(number = 1) {
       const data = await api(`/tasks?page=${number}`)
@@ -112,8 +133,9 @@ const Workbench = {
       if (!store.user) return
       error.value = null; notice.value = ''
       try {
-        if (['home','briefings'].includes(page.value)) await loadBriefings()
-        if (['home','tasks'].includes(page.value)) await loadSchedules()
+        if (page.value === 'home') await loadLatestBriefing()
+        if (page.value === 'briefings') await loadBriefings()
+        if (page.value === 'tasks') await loadSchedules()
         if (page.value === 'settings') { store.user = await api('/me'); fillSettings(store.user) }
         if (page.value === 'assistant') await reloadConversation()
         if (page.value === 'briefing') await loadBriefing(route.params.id)
@@ -139,7 +161,8 @@ const Workbench = {
             const fresh = await api(`/news/tasks/${task.id}`)
             if (epoch !== sessionEpoch || disposed) return
             Object.assign(task, fresh, { connection_error:false })
-            if (terminal.has(task.status) && ['home','briefings'].includes(page.value)) await loadBriefings(briefings.value.page)
+            if (terminal.has(task.status) && page.value === 'home') await loadLatestBriefing()
+            if (terminal.has(task.status) && page.value === 'briefings') await loadBriefings(briefings.value.page)
           } catch (value) {
             if (epoch !== sessionEpoch) return
             task.connection_error = true
@@ -296,7 +319,7 @@ const Workbench = {
     watch(() => route.fullPath,loadPage)
     onMounted(async () => { await restoreSession(); pollTimer = setInterval(tick,4000) })
     onUnmounted(() => { disposed = true; clearInterval(pollTimer); chatController?.abort() })
-    return { navigation,store,initialized,busy,error,notice,authMode,auth,page,title,briefings,schedules,selectedTask,executions,briefing,deliveries,instant,taskForm,editing,settings,historyForm,history,historyBriefing,threadId,messages,draft,streaming,chatRecovery,interrupt,interruptions,resumeAnswers,approvalChoices,resources,newConversation,resumeChat,authenticate,logout,generate,cancelGeneration,retryGeneration,loadPage,loadBriefings,loadSchedules,loadBriefing,mailAction,newTask,inspectTask,editTask,saveTask,scheduleAction,saveSettings,searchHistory,createHistoryBriefing,sendChat,recoverChat,formatDate,sourceUrl,labels,allowed,showError }
+    return { navigation,store,initialized,busy,error,notice,authMode,auth,page,title,briefings,latestLoading,schedules,selectedTask,executions,briefing,deliveries,instant,taskForm,editing,settings,historyForm,history,historyBriefing,threadId,messages,draft,streaming,chatRecovery,interrupt,interruptions,resumeAnswers,approvalChoices,resources,newConversation,resumeChat,authenticate,logout,generate,cancelGeneration,retryGeneration,loadPage,loadBriefings,loadLatestBriefing,loadSchedules,loadBriefing,mailAction,newTask,inspectTask,editTask,saveTask,scheduleAction,saveSettings,searchHistory,createHistoryBriefing,sendChat,recoverChat,formatDate,sourceUrl,labels,allowed,showError }
   }, template,
 }
 const router = createRouter({ history:createWebHashHistory(), routes:[...navigation.map(item => ({ path:item.path,name:item.name,component:Workbench })),{ path:'/briefings/:id',name:'briefing',component:Workbench },{ path:'/login',name:'login',component:Workbench },{ path:'/:pathMatch(.*)*',redirect:'/' }] })
