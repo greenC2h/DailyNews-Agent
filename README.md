@@ -110,6 +110,17 @@ All supported settings and defaults are listed in `.env.example`. Store briefing
 
 ## Development and Tests
 
+### Business Database SQL
+
+The root [schema.sql](schema.sql) contains the nine PostgreSQL business tables, foreign keys, and indexes at Alembic revision `c3e8f1a4b209`. It excludes LangGraph-managed tables and business data. Normal deployments should use Alembic as described above. For manual initialization of an empty database:
+
+```powershell
+psql -h localhost -U postgres -d dailynews -v ON_ERROR_STOP=1 -f schema.sql
+uv run alembic stamp c3e8f1a4b209
+```
+
+Configure `.env` for that same database before stamping. Do not run this snapshot against an existing database or run the initial migrations again after importing it. Future schema upgrades still use `uv run alembic upgrade head`; framework tables are initialized by the application.
+
 ```powershell
 uv run python -m pytest -q
 npm --prefix frontend run test
@@ -235,6 +246,17 @@ uv run python -m app.worker
 全部支持的配置项及默认值见 `.env.example`。简报 HTML 默认保存在 `./data/html`，可通过 `HTML_ROOT` 修改。
 
 ## 开发与测试
+
+### 业务数据库建表 SQL
+
+项目根目录的 [schema.sql](schema.sql) 包含 Alembic 版本 `c3e8f1a4b209` 对应的 9 张 PostgreSQL 业务表、外键和索引，不包含 LangGraph 自行维护的表或业务数据。常规部署优先使用前述 Alembic 迁移；如需手动初始化空数据库：
+
+```powershell
+psql -h localhost -U postgres -d dailynews -v ON_ERROR_STOP=1 -f schema.sql
+uv run alembic stamp c3e8f1a4b209
+```
+
+登记版本前请确保 `.env` 指向同一个数据库。不要对已有业务表的数据库执行此快照，也不要导入后再次执行从零建表迁移。后续升级仍使用 `uv run alembic upgrade head`；框架表由应用启动时初始化。
 
 ```powershell
 uv run python -m pytest -q
