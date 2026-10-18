@@ -56,6 +56,12 @@ Web 服务和 Worker 是两个独立进程；要执行定时简报，二者都�
 
 ## 🚀 启动指南
 
+### Windows 一键启动
+
+完成首次配置后，可直接双击项目根目录的 `启动DailyNews.bat`。脚本会自动同步依赖、构建前端、执行数据库迁移、启动 Web 服务和 Worker，并在 `http://127.0.0.1:8000/healthz` 就绪后打开浏览器。关闭启动窗口会停止本次启动的两个服务进程。
+
+启动日志位于 `data/logs/`；若启动失败，优先查看 `web-error.log` 和 `worker-error.log`。首次启动可能需要较长时间安装依赖和构建前端。
+
 ### 环境要求
 
 - Git、Python 3.12 或更新版本，以及 [`uv`](https://docs.astral.sh/uv/)

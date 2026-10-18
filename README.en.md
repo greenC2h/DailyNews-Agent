@@ -58,6 +58,12 @@ The web service and Worker are separate processes and must both remain running f
 
 ## 🚀 Getting Started
 
+### One-click startup on Windows
+
+After the initial configuration, double-click `启动DailyNews.bat` in the repository root. The launcher synchronizes dependencies, builds the frontend, applies database migrations, starts the Web service and Worker, then opens the browser after `http://127.0.0.1:8000/healthz` is ready. Closing the launcher window stops the two processes started by that run.
+
+Startup logs are written to `data/logs/`; check `web-error.log` and `worker-error.log` first when startup fails. The first run may take longer while dependencies are installed and the frontend is built.
+
 ### Requirements
 
 - Git, Python 3.12 or newer, and [`uv`](https://docs.astral.sh/uv/)
