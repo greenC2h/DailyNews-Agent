@@ -85,3 +85,16 @@ describe('助手 Markdown 展示', () => {
     expect(html).not.toContain('<script>')
   })
 })
+
+describe('简报事件来源展示', () => {
+  /** 验证详情视图读取事件资料中的完整来源数组，并兼容旧主来源字段。 */
+  it('返回事件全部来源或旧记录的单一来源', () => {
+    setActivePinia(createPinia())
+    const page = captured.component.setup()
+    const sources = [{ url:'https://a.example/news' }, { url:'https://b.example/news' }]
+    expect(page.eventSources({ source:'主来源', url:'https://main.example', facts:{ sources } })).toEqual(sources)
+    expect(page.eventSources({ source:'旧来源', url:'https://old.example', facts:{} })).toEqual([
+      { source:'旧来源', url:'https://old.example' },
+    ])
+  })
+})

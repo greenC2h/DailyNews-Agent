@@ -32,6 +32,13 @@ function formDate(value, zone) {
 /** 将逗号或换行分隔的偏好转换为去重列表。 */
 function splitList(text) { return [...new Set(text.split(/[,，\n]/).map(value => value.trim()).filter(Boolean))] }
 
+/** 返回事件资料中的全部来源，并为旧记录回退到单一来源字段。 */
+function eventSources(event) {
+  const sources = event?.facts?.sources
+  if (Array.isArray(sources) && sources.length) return sources
+  return event?.source || event?.url ? [{ source:event.source || '', url:event.url || '', ...(event.published_at ? { published_at:event.published_at } : {}) }] : []
+}
+
 /** 转义模型回复中的 HTML 特殊字符，确保 Markdown 渲染不会执行原始标签。 */
 function escapeMarkdownHtml(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
@@ -345,7 +352,7 @@ const Workbench = {
     watch(() => route.fullPath,loadPage)
     onMounted(async () => { await restoreSession(); pollTimer = setInterval(tick,4000) })
     onUnmounted(() => { disposed = true; clearInterval(pollTimer); chatController?.abort() })
-    return { navigation,store,initialized,busy,error,notice,authMode,auth,page,title,briefings,latestLoading,schedules,selectedTask,executions,briefing,deliveries,instant,taskForm,editing,settings,historyForm,history,historyBriefing,threadId,messages,draft,streaming,chatRecovery,interrupt,interruptions,resumeAnswers,approvalChoices,resources,newConversation,resumeChat,authenticate,logout,generate,cancelGeneration,retryGeneration,loadPage,loadBriefings,loadLatestBriefing,loadSchedules,loadBriefing,mailAction,newTask,inspectTask,editTask,saveTask,scheduleAction,saveSettings,searchHistory,createHistoryBriefing,sendChat,recoverChat,formatDate,markdownToHtml,sourceUrl,labels,allowed,showError }
+    return { navigation,store,initialized,busy,error,notice,authMode,auth,page,title,briefings,latestLoading,schedules,selectedTask,executions,briefing,deliveries,instant,taskForm,editing,settings,historyForm,history,historyBriefing,threadId,messages,draft,streaming,chatRecovery,interrupt,interruptions,resumeAnswers,approvalChoices,resources,newConversation,resumeChat,authenticate,logout,generate,cancelGeneration,retryGeneration,loadPage,loadBriefings,loadLatestBriefing,loadSchedules,loadBriefing,mailAction,newTask,inspectTask,editTask,saveTask,scheduleAction,saveSettings,searchHistory,createHistoryBriefing,sendChat,recoverChat,formatDate,markdownToHtml,sourceUrl,eventSources,labels,allowed,showError }
   }, template,
 }
 const router = createRouter({ history:createWebHashHistory(), routes:[...navigation.map(item => ({ path:item.path,name:item.name,component:Workbench })),{ path:'/briefings/:id',name:'briefing',component:Workbench },{ path:'/login',name:'login',component:Workbench },{ path:'/:pathMatch(.*)*',redirect:'/' }] })

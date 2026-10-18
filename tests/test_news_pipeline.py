@@ -199,6 +199,40 @@ def test_individual_event_retry_skip_and_html_context(monkeypatch):
     assert "标题：AI 新闻简报" not in html_user_prompt
 
 
+def test_briefing_keeps_every_candidate_source_in_event_and_html(monkeypatch):
+    """事件整理和 HTML 输出均保留候选事件的全部原文来源。"""
+    first = news.NewsArticle("报道甲", "https://source-a.example/news", "媒体甲", START, CHINESE)
+    second = news.NewsArticle("报道乙", "https://source-b.example/news", "媒体乙", START, CHINESE)
+    generated = generation.EventRecord(
+        title="共同事件", summary="事件摘要", facts=["关键事实"],
+        sources=[generation.EventSource(
+            title=first.title, source=first.source, url=first.url,
+            published_at=first.published_at.isoformat(), excerpt="来源甲证据",
+        )],
+    )
+
+    def invoke(schema, instruction, prompt):
+        """模拟模型漏掉候选来源及 HTML 来源链接的输出。"""
+        if schema is generation.CandidateBatch:
+            return generation.CandidateBatch(events=[generation.EventCandidate(
+                title="共同事件", article_indices=[0, 1], relevance=0.9,
+            )])
+        if schema is generation.EventRecord:
+            return generated
+        return generation.HtmlDocument(html=(
+            '<html><body><article><h2>共同事件</h2>'
+            '<a href="https://source-a.example/news">媒体甲</a>'
+            '</article></body></html>'
+        ))
+
+    monkeypatch.setattr(generation, "_invoke", invoke)
+    events, html = generation.generate_briefing([first, second], "主题", "zh-CN", {})
+
+    assert [source.url for source in events[0].sources] == [first.url, second.url]
+    assert html.count(first.url) == 1
+    assert html.count(second.url) == 1
+
+
 def test_html_failure_retains_events_and_retry_reuses_them(monkeypatch):
     """HTML 失败返回已完成资料，重试时不调用采集或候选识别。"""
     events = [_event()]
