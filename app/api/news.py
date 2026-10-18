@@ -13,19 +13,19 @@ from app.db.news_models import GenerationTask
 from app.services.tasking import publish_immediate
 from app.db.news_models import MailDelivery
 from app.services.html_storage import HtmlStorageError, read_stored_html
-from app.services.briefing_metadata import extract_briefing_preview, extract_briefing_title
+from app.services.briefing_metadata import extract_briefing_title
 
 router = APIRouter(prefix="/api/v1/news", tags=["news"])
 settings = get_settings()
 
 
-def briefing_display_metadata(briefing: Briefing) -> tuple[str, str]:
-    """从保存的 HTML 读取 AI 标题和首段正文，文件不可用时保留数据库标题。"""
+def briefing_display_title(briefing: Briefing) -> str:
+    """从保存的 HTML 读取 AI 标题，文件不可用时保留数据库标题。"""
     try:
         html = read_stored_html(briefing, settings.html_root).decode("utf-8", errors="replace")
     except HtmlStorageError:
-        return briefing.title, ""
-    return extract_briefing_title(html, briefing.title), extract_briefing_preview(html)
+        return briefing.title
+    return extract_briefing_title(html, briefing.title)
 
 class BriefingRequest(BaseModel):
     """即时简报请求。"""
@@ -89,13 +89,13 @@ def cancel_task(task_id: str, db: Session = Depends(get_db), user: User = Depend
 
 @router.get("/briefings")
 def list_briefings(page: int = Query(default=1, ge=1), db: Session = Depends(get_db), user: User = Depends(current_user)):
-    """以每页 20 条返回当前用户简报及清洗后的正文示意。"""
+    """以每页 20 条返回当前用户简报及 AI 生成的标题。"""
     query = db.query(Briefing).filter(Briefing.user_id == user.id)
     total = query.count(); rows = query.order_by(Briefing.created_at.desc()).offset((page - 1) * 20).limit(20).all()
     items = []
     for row in rows:
-        title, preview = briefing_display_metadata(row)
-        items.append({"id": row.id, "title": title, "preview": preview, "status": row.status, "event_count": row.event_count, "created_at": row.created_at})
+        title = briefing_display_title(row)
+        items.append({"id": row.id, "title": title, "status": row.status, "event_count": row.event_count, "created_at": row.created_at})
     return {"page":page,"page_size":20,"total":total,"total_pages":(total + 19) // 20,"items":items}
 
 @router.get("/briefings/{briefing_id}")
@@ -103,7 +103,7 @@ def get_briefing(briefing_id: str, db: Session = Depends(get_db), user: User = D
     """返回简报元数据和事件资料，并校验用户归属。"""
     briefing = db.query(Briefing).filter(Briefing.id == briefing_id, Briefing.user_id == user.id).first()
     if not briefing: raise HTTPException(404, detail={"code":"NOT_FOUND","message":"简报不存在"})
-    title, _ = briefing_display_metadata(briefing)
+    title = briefing_display_title(briefing)
     events = db.query(NewsEvent).filter(NewsEvent.briefing_id == briefing.id, NewsEvent.user_id == user.id).all()
     briefing.read_at = datetime.now(timezone.utc); db.commit()
     if briefing.event_ids:

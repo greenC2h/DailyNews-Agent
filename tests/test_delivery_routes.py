@@ -63,11 +63,11 @@ def test_preview_returns_html_with_script_blocking_policy(client, tmp_path):
     assert "sandbox allow-popups allow-popups-to-escape-sandbox" in response.headers["content-security-policy"]
 
 
-def test_briefing_list_uses_generated_title_and_clean_preview(client, tmp_path):
-    """列表应使用 HTML 的 AI 标题，并跳过品牌与主题元信息。"""
-    user = client.post("/api/v1/auth/register", json={"email":"list-preview@example.com","password":"secure-pass-123"}).json()
+def test_briefing_list_uses_generated_title(client, tmp_path):
+    """列表应使用 HTML 的 AI 标题，不暴露旧的查询词拼接标题。"""
+    user = client.post("/api/v1/auth/register", json={"email":"list-title@example.com","password":"secure-pass-123"}).json()
     path = tmp_path / "brief.html"
-    path.write_text("<p>DailyNews · 新闻简报</p><h1>端侧 AI 的新一轮协同</h1><p>主题：AI</p><p>端侧硬件与模型协同正在加速进入产业化阶段。</p>", encoding="utf-8")
+    path.write_text("<p>DailyNews · 新闻简报</p><h1>端侧 AI 的新一轮协同</h1><p>主题：AI</p>", encoding="utf-8")
     dependency = app.dependency_overrides[get_db]()
     db = next(dependency)
     try:
@@ -81,4 +81,4 @@ def test_briefing_list_uses_generated_title_and_clean_preview(client, tmp_path):
     assert response.status_code == 200
     item = response.json()["items"][0]
     assert item["title"] == "端侧 AI 的新一轮协同"
-    assert item["preview"] == "端侧硬件与模型协同正在加速进入产业化阶段。"
+    assert "preview" not in item
