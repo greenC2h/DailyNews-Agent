@@ -1,11 +1,11 @@
 -- DailyNews PostgreSQL 业务建表快照
--- 对应 Alembic revision: c3e8f1a4b209
+-- 对应 Alembic revision: e1a7c4d91b20
 -- 仅用于全新空数据库；已有数据库必须使用 uv run alembic upgrade head。
 -- 不包含 LangGraph Checkpointer / Store、Milvus 或 alembic_version。
 -- 不包含业务数据；UUID、时间和部分默认值由应用生成，非数据库默认值。
 -- 在仓库根目录执行：psql -h localhost -U postgres -d dailynews -v ON_ERROR_STOP=1 -f database/schema.sql
 -- 执行成功后，在同一数据库配置下运行：
---   uv run alembic stamp c3e8f1a4b209
+--   uv run alembic stamp e1a7c4d91b20
 -- stamp 仅登记已导入的结构版本，不执行建表；禁止对不匹配的已有库盲目 stamp。
 -- 常规部署仍优先使用 Alembic；不要同时导入本文件和执行从零迁移。
 -- 框架表由应用首次启动自行初始化。
@@ -86,6 +86,7 @@ CREATE TABLE scheduled_tasks (
 	is_default BOOLEAN DEFAULT false NOT NULL,
 	window_start TIMESTAMP WITH TIME ZONE,
 	window_end TIMESTAMP WITH TIME ZONE,
+	article_limit INTEGER,
 	overrides JSON DEFAULT '{}'::json NOT NULL,
 	idempotency_key VARCHAR(200),
 	CONSTRAINT scheduled_tasks_pkey PRIMARY KEY (id),
@@ -115,6 +116,7 @@ CREATE TABLE generation_tasks (
 	user_id VARCHAR(36) NOT NULL,
 	query VARCHAR(500) NOT NULL,
 	"limit" INTEGER NOT NULL,
+	article_limit INTEGER NOT NULL,
 	window_start TIMESTAMP WITH TIME ZONE NOT NULL,
 	window_end TIMESTAMP WITH TIME ZONE NOT NULL,
 	status VARCHAR(32) NOT NULL,

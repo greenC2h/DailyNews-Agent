@@ -145,11 +145,11 @@ uv run python -m app.worker
 
 ## 🗄️ 业务数据库结构
 
-[database/schema.sql](database/schema.sql) 包含 Alembic 版本 `c3e8f1a4b209` 对应的 9 张 PostgreSQL 业务表、外键和索引，不包含 LangGraph 自行维护的表或业务数据。常规部署优先使用前述 Alembic 迁移；如需手动初始化空数据库：
+[database/schema.sql](database/schema.sql) 包含当前 Alembic 版本 `e1a7c4d91b20` 对应的 9 张 PostgreSQL 业务表、外键和索引，不包含 LangGraph 自行维护的表或业务数据。常规部署优先使用前述 Alembic 迁移；如需手动初始化空数据库：
 
 ```powershell
 psql -h localhost -U postgres -d dailynews -v ON_ERROR_STOP=1 -f database/schema.sql
-uv run alembic stamp c3e8f1a4b209
+uv run alembic stamp e1a7c4d91b20
 ```
 
 登记版本前请确保 `.env` 指向同一个数据库。不要对已有业务表的数据库执行此快照，也不要导入后再次执行从零建表迁移。后续升级仍使用 `uv run alembic upgrade head`；框架表由应用启动时初始化。

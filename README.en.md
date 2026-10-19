@@ -147,11 +147,11 @@ All supported settings and defaults are listed in `.env.example`. Store briefing
 
 ## 🗄️ Database Schema
 
-[database/schema.sql](database/schema.sql) contains the nine PostgreSQL business tables, foreign keys, and indexes at Alembic revision `c3e8f1a4b209`. It excludes LangGraph-managed tables and business data. Normal deployments should use Alembic as described above. For manual initialization of an empty database:
+[database/schema.sql](database/schema.sql) contains the nine PostgreSQL business tables, foreign keys, and indexes at the current Alembic revision `e1a7c4d91b20`. It excludes LangGraph-managed tables and business data. Normal deployments should use Alembic as described above. For manual initialization of an empty database:
 
 ```powershell
 psql -h localhost -U postgres -d dailynews -v ON_ERROR_STOP=1 -f database/schema.sql
-uv run alembic stamp c3e8f1a4b209
+uv run alembic stamp e1a7c4d91b20
 ```
 
 Configure `.env` for that same database before stamping. Do not run this snapshot against an existing database or run the initial migrations again after importing it. Future schema upgrades still use `uv run alembic upgrade head`; framework tables are initialized by the application.
